@@ -1,0 +1,6 @@
+[submodule "src/external/json_struct"]
+	path = src/external/json_struct
+	url = git@github.com:jorgen/json_struct.git
+[submodule "src/external/cpp-httplib"]
+	path = src/external/cpp-httplib
+	url = git@github.com:yhirose/cpp-httplib.git

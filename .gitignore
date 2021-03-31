@@ -1,0 +1,7 @@
+/.cache
+/.idea
+/.vscode
+
+/dependencies
+/build
+/local-env
