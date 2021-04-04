@@ -113,6 +113,8 @@ Config::Config(int &argc, char *argv[]) {
                                             "Disable UTP")
         ("disable_upnp",                    po::value<bool>(&disable_upnp)->default_value(disable_upnp),
                                             "Disable UPNP")
+        ("disable_lsd",                     po::value<bool>(&disable_lsd)->default_value(disable_lsd),
+                                            "Disable LSD")
 
         ("listen_auto_detect_ip",           po::value<bool>(&listen_auto_detect_ip)->default_value(listen_auto_detect_ip),
                                             "Automatically detect listen interface")

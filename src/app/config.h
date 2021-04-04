@@ -90,6 +90,7 @@ struct Config {
     bool disable_tcp = false;
     bool disable_utp = false;
     bool disable_upnp = false;
+    bool disable_lsd = false;
 
     bool listen_auto_detect_ip = true;
     std::vector<std::string> listen_interfaces;
@@ -141,7 +142,7 @@ struct Config {
 
               JS_MEMBER(seed_forever), JS_MEMBER(share_ratio_limit), JS_MEMBER(seed_time_ratio_limit), JS_MEMBER(seed_time_limit),
 
-              JS_MEMBER(disable_dht), JS_MEMBER(disable_tcp), JS_MEMBER(disable_utp), JS_MEMBER(disable_upnp),
+              JS_MEMBER(disable_dht), JS_MEMBER(disable_tcp), JS_MEMBER(disable_utp), JS_MEMBER(disable_upnp), JS_MEMBER(disable_lsd),
 
               JS_MEMBER(listen_auto_detect_ip), JS_MEMBER(listen_interfaces), JS_MEMBER(outgoing_interfaces),
 

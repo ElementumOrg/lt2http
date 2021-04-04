@@ -328,8 +328,10 @@ void Session::reconfigure() {
 }
 
 void Session::start_services() {
-    OATPP_LOGI("Session::start_services", "Starting LSD...");
-    m_pack.set_bool(lt::settings_pack::enable_lsd, true);
+    if (!m_config.disable_lsd) {
+        OATPP_LOGI("Session::start_services", "Starting LSD...");
+        m_pack.set_bool(lt::settings_pack::enable_lsd, true);
+    }
 
     if (!m_config.disable_dht) {
         OATPP_LOGI("Session::start_services", "Starting DHT...");
@@ -356,8 +358,10 @@ void Session::start_services() {
 }
 
 void Session::stop_services() {
-    OATPP_LOGI("Session::stop_services", "Stopping LSD...");
-    m_pack.set_bool(lt::settings_pack::enable_lsd, false);
+    if (!m_config.disable_lsd) {
+        OATPP_LOGI("Session::stop_services", "Stopping LSD...");
+        m_pack.set_bool(lt::settings_pack::enable_lsd, false);
+    }
 
     if (!m_config.disable_dht) {
         OATPP_LOGI("Session::stop_services", "Stopping DHT...");
