@@ -29,6 +29,7 @@ set(minOpenSSLVersion 1.1.1)
 set(minBoostVersion 1.66)
 set(minOatppVersion 1.2.5)
 set(minOatppSwaggerVersion 1.2.5)
+set(minMimallocVersion 1.4)
 
 include(CheckIPOSupported)
 include(CheckCXXSourceCompiles)

@@ -9,6 +9,11 @@
 
 #include <boost/stacktrace.hpp>
 
+#ifdef USE_MIMALLOC
+#include <mimalloc.h>
+#include <mimalloc-override.h>
+#endif
+
 int main(int argc, char *argv[]) {
     auto const logger = std::make_shared<CustomLogger>();
     oatpp::base::Environment::init(logger);

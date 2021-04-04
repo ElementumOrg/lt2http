@@ -82,3 +82,14 @@ CURRENT_BUILD_DIR="dependencies/oatpp-swagger/"
     sudo cmake --install ${LOCAL_DIR} \
 )
 [ $? -eq 0 ] || exit 1
+
+echo "Building mimalloc"
+CURRENT_BUILD_DIR="dependencies/mimalloc/"
+(
+  mkdir -p $CURRENT_BUILD_DIR && \
+    cd $CURRENT_BUILD_DIR && \
+    cmake -B ${LOCAL_DIR} -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_STANDARD=${CXX_STANDARD} -DBUILD_SHARED_LIBS=OFF -DOATPP_BUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX=${INST_DIR} && \
+    cmake --build ${LOCAL_DIR} --parallel ${CMAKE_PARALLEL} && \
+    sudo cmake --install ${LOCAL_DIR} \
+)
+[ $? -eq 0 ] || exit 1

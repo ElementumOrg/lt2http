@@ -13,9 +13,11 @@ mkdir -p ${DESTDIR}
 cd ${DESTDIR}
 [ $? -eq 0 ] || { echo "Cannot cd into ${DESTDIR}"; exit 1; }
 
+
 echo "Cleaning dependencies directory"
 sudo rm -rf ${DESTDIR}/*
 [ $? -eq 0 ] || { echo "Cannot cleanup directory ${DESTDIR}"; exit 1; }
+
 
 echo
 echo "Downloading Boost, version: ${BOOST_VERSION}"
@@ -69,12 +71,23 @@ mv oatpp-${OATPP_VERSION} oatpp
 echo
 echo "Downloading Oatpp-Swagger, version: ${OATPP_SWAGGER_VERSION}"
 if [ ! -f "${OATPP_SWAGGER_VERSION}.tar.gz" ]; then
-  wget -q https://github.com/oatpp/oatpp-swagger/archive/refs/tags/${OATPP_VERSION}.tar.gz
+  wget -q https://github.com/oatpp/oatpp-swagger/archive/refs/tags/${OATPP_SWAGGER_VERSION}.tar.gz
 fi
 rm -rf oatpp-swagger
 tar -xzf ${OATPP_SWAGGER_VERSION}.tar.gz
 rm ${OATPP_SWAGGER_VERSION}.tar.gz
 mv oatpp-swagger-${OATPP_SWAGGER_VERSION} oatpp-swagger
+
+
+echo
+echo "Downloading mimalloc, version: ${MIMALLOC_VERSION}"
+if [ ! -f "v${MIMALLOC_VERSION}.tar.gz" ]; then
+  wget -q https://github.com/microsoft/mimalloc/archive/refs/tags/v${MIMALLOC_VERSION}.tar.gz
+fi
+rm -rf mimalloc
+tar -xzf v${MIMALLOC_VERSION}.tar.gz
+rm v${MIMALLOC_VERSION}.tar.gz
+mv mimalloc-${MIMALLOC_VERSION} mimalloc
 
 
 echo
