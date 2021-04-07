@@ -4,7 +4,6 @@
 #include <memory>
 #include <csignal>
 
-#include <oatpp-swagger/Controller.hpp>
 #include <boost/stacktrace.hpp>
 
 #include <app/config.h>
@@ -14,6 +13,7 @@
 #include <web/settings.h>
 #include <web/session.h>
 #include <web/stream.h>
+#include <web/swagger.h>
 #include <web/torrents.h>
 
 void signalHandler( int signum ) {
@@ -72,7 +72,7 @@ void Application::run() const {
     AppComponent components;
 
     auto router = components.httpRouter.getObject();
-    auto docEndpoints = oatpp::swagger::Controller::Endpoints::createShared();
+    auto docEndpoints = oatpp::swagger::CustomController::Endpoints::createShared();
   
     auto settingsController = SettingsController::createShared();
     settingsController->addEndpointsToRouter(router);
@@ -99,7 +99,7 @@ void Application::run() const {
     docEndpoints->pushBackAll(filesController->getEndpoints());
     docEndpoints->pushBackAll(streamController->getEndpoints());
   
-    auto swaggerController = oatpp::swagger::Controller::createShared(docEndpoints);
+    auto swaggerController = oatpp::swagger::CustomController::createShared(docEndpoints);
     swaggerController->addEndpointsToRouter(router);
 
     /* Get connection handler component */
