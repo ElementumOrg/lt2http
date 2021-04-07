@@ -2,6 +2,7 @@
 /.idea
 /.vscode
 
+/CMakeFiles
 /dependencies
 /build
 /local-env
