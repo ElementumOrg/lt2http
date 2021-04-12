@@ -55,7 +55,7 @@ lh::Session& Application::session() {
 }
 
 void Application::run() const {
-    OATPP_LOGI("Application::run", "Starting lt2http, version: %s", lh::VERSION.c_str());
+    OATPP_LOGI("Application::run", "Starting lt2http, version: %s, Libtorrent version: %s", lh::VERSION.c_str(), "LIBTORRENT_VERSION");
 
     std::signal(SIGINT, signalHandler);
     std::signal(SIGABRT, signalHandler);
