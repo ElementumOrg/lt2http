@@ -15,7 +15,7 @@
 #endif
 
 int main(int argc, char *argv[]) {
-    auto const logger = std::make_shared<CustomLogger>();
+    auto const logger = std::make_shared<lh::CustomLogger>();
     oatpp::base::Environment::init(logger);
 
     try {
