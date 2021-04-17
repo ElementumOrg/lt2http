@@ -164,7 +164,7 @@ else()
 endif()
 
 add_executable(lt2http app/main.cpp)
-set_target_properties(lt2http PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
+set_target_properties(lt2http PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/out/")
 
 target_link_libraries(lt2http
     PRIVATE
