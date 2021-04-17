@@ -35,55 +35,32 @@ Dependencies
 `lt2http` has these dependencies:
 - Boost (at least version 1.66.0)
 - OpenSSL (at least version 1.1.1)
-- Libtorrent (at least version 1.2.1)
+- Libtorrent (at least version 2.0.0)
 - Oatpp (at least version 1.2.5)
 - Oatpp-swagger (at least version 1.2.5)
-
-To download dependencies, you can run `dependencies.sh`, it will create `dependencies/` directory and download everything there, prepared to be compiled.
-
-```
-$ ./dependencies.sh 
-Downloading dependencies
-Cleaning dependencies directory
-
-Downloading Boost, version: 1.72.0
-boost_1_72_0.tar.bz2: OK
-
-Downloading OpenSSL, version: 1.1.1f
-openssl-1.1.1f.tar.gz: OK
-
-Downloading Libtorrent, version: e00a152678fbce7903aa42bbd93e8b812f171928
-
-Downloading Oatpp, version: 1.2.5
-
-Downloading Oatpp-Swagger, version: 1.2.5
-
-Finished downloading dependencies.
-Now run ./build.sh to compile and install them.
-$ 
-```
+- MiMalloc (at least version 1.7.0)
+- Libbacktrace (latest master)
 
 Build dependencies
 ----------
-You can look at build commands at `build.sh` script.
+You can look at build commands at `scripts/build-local.sh` script.
 
 By default everything is built with `Release` profile, meaning all the default optimizations and lack of debug symbols.
 
-Default installation directory: `/usr/`.
+Default installation directory: `./local-env/`.
 
-You can change these at the top of `build.sh` before running.
+To use custom directory run:
+```
+sudo CROSS_ROOT=/usr/ CROSS_TRIPLE=x86_64-linux-gnu ./scripts/build-local.sh
+```
 
-Some notes regarding dependencies and `build.sh`:
+Some notes regarding dependencies and `build-local.sh`:
 - We force use of gcc-6, because cross-build docker image has gcc-6 (for non-Android targets). That is because building on a newer OS will require newer libc, so users with old Kernels will not be able to run it. You can use any compiler.
 - All dependencies are compiled as static libraries to avoid having library dependencies in a `lt2http` binary.
 - We force use of `C++17` to have same standard for all dependencies.
 - `Oatpp` is compiled always in a `Release` profile, because we usually do not need to debug it.
 - Boost installation makes a file `~/user-config.jam`, so if you don't want it to be overwritten - comment that in `build.sh`.
-
-Easy build command:
-```
-./build.sh
-```
+- MiMalloc is not used by default.
 
 Build lt2http
 ----------

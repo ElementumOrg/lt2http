@@ -13,7 +13,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 project(lt2http
     DESCRIPTION "libtorrent2http"
     HOMEPAGE_URL "https://github.com/ElementumOrg/lt2http"
-    LANGUAGES CXX
+    LANGUAGES C CXX
 )
 
 # Dependencies version requirements - older vesions may work, but you are on your own

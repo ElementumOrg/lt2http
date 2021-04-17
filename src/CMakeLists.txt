@@ -41,6 +41,7 @@ find_package(OpenSSL ${minOpenSSLVersion} REQUIRED)
 find_package(Boost ${minBoostVersion} COMPONENTS system program_options REQUIRED)
 find_package(oatpp ${minOatppVersion} REQUIRED)
 find_package(oatpp-swagger ${minOatppSwaggerVersion} REQUIRED)
+find_library(Backtrace_LIBRARY backtrace HINTS ${CROSS_ROOT}/lib/)
 
 # List all available parameters
 # get_cmake_property(_variableNames VARIABLES)
@@ -72,8 +73,7 @@ include_directories(
 
 add_definitions(
     -DOATPP_SWAGGER_RES_PATH="${oatpp-swagger_INCLUDE_DIRS}/../bin/oatpp-swagger/res" 
-    -DBOOST_STACKTRACE_USE_ADDR2LINE
-    -DLIBTORRENT_VERSION="${LIBTORRENT_RASTERBAR_VERSION}"
+    -DBOOST_STACKTRACE_USE_BACKTRACE
 )
 
 add_library(lt2http-base STATIC
@@ -115,7 +115,7 @@ add_library(lt2http-base STATIC
     utils/http_client.h
     utils/http_url.h
     utils/logger.h
-    # utils/ltunderlyingtypes.h
+    utils/logger.cpp
     utils/numbers.h
     utils/path.h
     utils/pieces.h
@@ -139,17 +139,22 @@ target_include_directories(lt2http-base PUBLIC .)
 
 target_link_libraries(lt2http-base
     PUBLIC
-        LibtorrentRasterbar::torrent-rasterbar
         OpenSSL::Crypto OpenSSL::SSL
+        ${Backtrace_LIBRARY}
         ${Boost_LIBRARIES}
         oatpp::oatpp
         oatpp::oatpp-swagger
-        dl
+        LibtorrentRasterbar::torrent-rasterbar
 )
 
 # Features checks
 if(USE_MIMALLOC)
     target_link_libraries(lt2http-base PUBLIC mimalloc-static)
+endif()
+if (IFADDRS)
+    add_subdirectory(external/ifaddrs)
+    target_include_directories(lt2http-base PRIVATE external/ifaddrs)
+    target_link_libraries(lt2http-base PUBLIC ifaddrs)
 endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
