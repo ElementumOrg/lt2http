@@ -3,7 +3,8 @@
 #include <iostream>
 #include <random>
 #include <sstream>
-#include <bits/stdc++.h>
+#include <vector>
+#include <ctime>
 
 inline int random(int min, int max) // range : [min, max]
 {

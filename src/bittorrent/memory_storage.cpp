@@ -124,7 +124,7 @@ int memory_storage::readv(lt::span<lt::iovec_t const> bufs, lt::piece_index_t co
     if (!is_initialized)
         return 0;
 
-    auto piece = static_cast<LTUnderlyingType<lt::piece_index_t>>(pi);
+    auto piece = static_cast<int>(pi);
     if (is_logging) {
         OATPP_LOGI("memory_storage::readv", "readv in  p: %d, off: %d", piece, offset)
     };
@@ -163,7 +163,7 @@ int memory_storage::readv(lt::span<lt::iovec_t const> bufs, lt::piece_index_t co
 
 int memory_storage::writev(lt::span<lt::iovec_t const> bufs, lt::piece_index_t const pi, int offset, lt::open_mode_t  /*mode*/,
             lt::storage_error & /*ec*/) {
-    auto piece = static_cast<LTUnderlyingType<lt::piece_index_t>>(pi);
+    auto piece = static_cast<int>(pi);
     if (is_logging) {
         OATPP_LOGI("memory_storage::writev", "writev in  p: %d, off: %d, bufs: %d", piece, offset, bufs.size());
     };

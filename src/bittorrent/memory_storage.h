@@ -30,7 +30,6 @@
 
 #include <app/config.h>
 
-#include <utils/ltunderlyingtypes.h>
 #include <utils/numbers.h>
 #include <utils/strings.h>
 
