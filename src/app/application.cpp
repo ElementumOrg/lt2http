@@ -5,6 +5,7 @@
 #include <csignal>
 
 #include <boost/stacktrace.hpp>
+#include <libtorrent/version.hpp>
 
 #include <app/config.h>
 
@@ -55,12 +56,14 @@ lh::Session& Application::session() {
 }
 
 void Application::run() const {
-    OATPP_LOGI("Application::run", "Starting lt2http, version: %s, Libtorrent version: %s", lh::VERSION.c_str(), "LIBTORRENT_VERSION");
+    OATPP_LOGI("Application::run", "Starting lt2http, version: %s, Libtorrent version: %s", lh::VERSION.c_str(), LIBTORRENT_VERSION);
 
     std::signal(SIGINT, signalHandler);
     std::signal(SIGABRT, signalHandler);
     std::signal(SIGTERM, signalHandler);
+#ifndef WIN32
     std::signal(SIGKILL, signalHandler);
+#endif
     std::signal(SIGSEGV, signalHandler);
 
     lh::web_interface = m_config.web_interface;
