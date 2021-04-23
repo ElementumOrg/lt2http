@@ -116,7 +116,7 @@ void memory_storage::set_memory_size(std::int64_t s) {
 }
 
 int memory_storage::get_buffers_count() const {
-    return buffer_size;
+    return buffer_size - int(reserved_pieces.count());
 };
 
 int memory_storage::readv(lt::span<lt::iovec_t const> bufs, lt::piece_index_t const pi, int offset, lt::open_mode_t  /*mode*/,

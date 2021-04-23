@@ -777,7 +777,7 @@ void Torrent::memory_size(std::int64_t size) {
 
 int Torrent::readahead_pieces() const {
     if (is_memory_storage())
-        return m_memory_storage->get_buffers_count();
+        return m_memory_storage->get_buffers_count() * lh::config().readahead_percents / 100;
     
     // That is a static value of pieces with priority > 1 to set for file storage.
     return lh::file_readahead_pieces;
