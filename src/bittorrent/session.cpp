@@ -135,7 +135,7 @@ void Session::configure() {
     }
 
     if (m_config.conntracker_limit_auto || m_config.conntracker_limit == 0) {
-        m_pack.set_int(lt::settings_pack::connection_speed, 250);
+        m_pack.set_int(lt::settings_pack::connection_speed, 300);
     } else {
         m_pack.set_int(lt::settings_pack::connection_speed, m_config.conntracker_limit);
     }
