@@ -4,6 +4,8 @@
 #include <chrono>
 #include <memory>
 
+#include <boost/dynamic_bitset.hpp>
+
 #include <libtorrent/alert_types.hpp>
 #include <libtorrent/create_torrent.hpp>
 #include <libtorrent/download_priority.hpp>
@@ -15,6 +17,8 @@
 
 #include <app/config.h>
 #include <bittorrent/memory_storage.h>
+
+using Bitset = boost::dynamic_bitset<>;
 
 namespace lh {
 
@@ -79,6 +83,8 @@ class Torrent : public std::enable_shared_from_this<lh::Torrent> {
     std::string m_torrentFile;
     std::string m_resumeFile;
     std::string m_partsFile;
+
+    Bitset m_deadline_pieces;
 
     bool m_hasSeedStatus = false;
     bool m_isStopped = false;
@@ -174,6 +180,7 @@ class Torrent : public std::enable_shared_from_this<lh::Torrent> {
     lt::download_priority_t piece_priority(lt::piece_index_t index) const;
     void piece_priority(lt::piece_index_t index, lt::download_priority_t priority);
     void set_piece_deadline(lt::piece_index_t index, int deadline);
+    void clear_piece_deadline(lt::piece_index_t index);
     void prioritize_pieces(lt::piece_index_t start, lt::piece_index_t end);
     void set_piece_priority(int piece, int deadline, lt::download_priority_t priority);
 

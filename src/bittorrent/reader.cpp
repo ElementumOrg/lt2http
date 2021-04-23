@@ -74,12 +74,13 @@ oatpp::v_io_size Reader::read(void *buffer, v_buff_size bufferSize, oatpp::async
     int left = bufferSize;
     lt::iovec_t b = {(char *)buffer, left};
 
-    for (int p = m_piece_start; p <= m_piece_end; p++) {
+    for (int p = m_piece_start; p <= m_piece_end; ++p) {
         if (!m_torrent->have_piece(p)) {
             wait_for_piece(p);
             if (m_isClosing || m_torrent->is_closing() || !m_torrent->have_piece(p))
                 return ret;
         }
+        m_torrent->clear_piece_deadline(p);
 
         if (ret > 0)
             b = b.subspan(bufferSize-left);

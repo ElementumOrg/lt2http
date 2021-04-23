@@ -130,6 +130,7 @@ void Torrent::on_metadata_received() {
         m_file_storage = m_nativeHandle.get_storage_impl();
     }
 
+    m_deadline_pieces.resize(m_nativeInfo->num_pieces());
     auto files = m_nativeInfo->files();
 
     m_files.clear();
@@ -486,8 +487,8 @@ lt::download_priority_t Torrent::piece_priority(lt::piece_index_t index) const {
 
 void Torrent::piece_priority(lt::piece_index_t index, lt::download_priority_t priority) {
     OATPP_LOGI("Torrent::piece_priority", "Setting priority '%d' for piece '%d'", priority, index);
-    if (priority < 0)
-        priority = 0;
+    if (priority < lt::dont_download)
+        priority = lt::dont_download;
     else if (priority > lt::top_priority)
         priority = lt::top_priority;
 
@@ -495,16 +496,24 @@ void Torrent::piece_priority(lt::piece_index_t index, lt::download_priority_t pr
 };
 
 void Torrent::set_piece_deadline(lt::piece_index_t index, int deadline) {
+    if (m_deadline_pieces.test(index))
+        return;
+
     OATPP_LOGI("Torrent::set_piece_deadline", "Setting deadline '%d' for piece '%d'", deadline, index);
+    m_deadline_pieces.set(index);
     m_nativeHandle.set_piece_deadline(index, deadline);
 };
 
+void Torrent::clear_piece_deadline(lt::piece_index_t index) {
+    m_deadline_pieces.reset(index);
+};
+
 void Torrent::prioritize_pieces(lt::piece_index_t start, lt::piece_index_t end) {
-    for (int i = start; i <= end; i++) {
+    for (int i = start; i <= int(start) + 2; ++i) {
         if (m_nativeHandle.have_piece(i))
             continue;
 
-        if (i - int(start) <= 0) {
+        if (i == int(start)) {
             set_piece_priority(i, 0, lt::download_priority_t{7});
         } else {
             set_piece_priority(i, (i - int(start)) * 10, lt::download_priority_t{6});
@@ -848,13 +857,13 @@ void Torrent::prioritize() {
 
         progression_left--;
         int priority = std::max(2, progression_priority);
-        if (!have_piece(piece) && (piece_priority(piece) <= 0 || int(piece_priority(piece)) + 2 <= priority)) {
+        if (!have_piece(piece) && (piece_priority(piece) <= 0 || int(piece_priority(piece)) < priority)) {
             pieces_request.emplace_back(std::pair<lt::piece_index_t, lt::download_priority_t>{piece, priority});
         }
     }
 
     if (!pieces_request.empty()) {
-        OATPP_LOGI("Torrent::prioritize", "Prioritizing %d pieces", pieces_request.size())
+        OATPP_LOGI("Torrent::prioritize", "Prioritizing %d pieces out of %d possible", pieces_request.size(), readahead_pieces())
         m_nativeHandle.prioritize_pieces(pieces_request);
     }
     if (is_memory_storage()) {
