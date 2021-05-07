@@ -196,7 +196,13 @@ Config::Config(int &argc, char *argv[]) {
         std::string json_data((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
         JS::ParseContext context(json_data);
 
-        context.parseTo(*this);
+        auto err = context.parseTo(*this);
+
+        if (err != JS::Error::NoError) {
+            std::string errorStr = context.makeErrorString();
+            OATPP_LOGE("Config", "Error converting json: %s", errorStr.c_str());
+            throw std::invalid_argument("Error converting json: " + errorStr);
+        }
     }
 
     // Convert string variables into enum types

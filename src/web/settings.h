@@ -34,7 +34,7 @@ class SettingsController : public oatpp::web::server::api::ApiController {
         auto err = context.parseTo(config);
 
         OATPP_ASSERT_HTTP(err == JS::Error::NoError, Status::CODE_500,
-                          ("Error converting json, errcode: " + std::to_string(int(err))).c_str())
+                          ("Error converting json: " + context.makeErrorString()).c_str())
 
         OATPP_LOGW("SettingsController::set", "Configuration updated to: %s", JS::serializeStruct(config).c_str())
         lh::session().reconfigure();
