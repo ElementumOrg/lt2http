@@ -29,7 +29,7 @@ class SettingsController : public oatpp::web::server::api::ApiController {
 
     ENDPOINT("POST", "/settings/set", set, BODY_STRING(String, body)) {
 
-        auto config = lh::config();
+        lh::Config &config = lh::config();
         JS::ParseContext context(body->c_str());
         auto err = context.parseTo(config);
 
