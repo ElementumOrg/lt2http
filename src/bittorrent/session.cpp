@@ -1,4 +1,5 @@
 #include "session.h"
+#include "app/application.h"
 
 #include <libtorrent/alert_types.hpp>
 #include <libtorrent/bdecode.hpp>
@@ -76,6 +77,7 @@ void Session::configure() {
     m_pack.set_bool(lt::settings_pack::upnp_ignore_nonrouters, true);
     m_pack.set_bool(lt::settings_pack::use_dht_as_fallback, false);
     m_pack.set_bool(lt::settings_pack::use_parole_mode, true);
+    m_pack.set_bool(lt::settings_pack::piece_priority_order, true);
 
     // Disabling services, as they are enabled by default in libtorrent
     m_pack.set_bool(lt::settings_pack::enable_upnp, false);
@@ -324,6 +326,7 @@ void Session::configure() {
 
 void Session::reconfigure() {
     OATPP_LOGI("Session::reconfigure", "Reconfiguring libtorrent session");
+    m_config = lh::config();
     configure();
 }
 
