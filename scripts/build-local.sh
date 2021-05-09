@@ -8,8 +8,8 @@ BT_CC=${CROSS_TRIPLE}-gcc
 BT_CXX=${CROSS_TRIPLE}-g++
 ${scripts_path}/build-backtrace.sh
 
-BOOST_CC=${CROSS_TRIPLE}-gcc \
-BOOST_CXX=${CROSS_TRIPLE}-g++ \
+BOOST_CC=gcc \
+BOOST_CXX=g++ \
 BOOST_OS=linux \
 BOOST_TARGET_OS=linux \
 ${scripts_path}/build-boost.sh
