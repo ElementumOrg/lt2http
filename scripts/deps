@@ -1,18 +1,26 @@
+# https://www.boost.org/
 BOOST_VERSION=1.75.0
 BOOST_SHA256=953db31e016db7bb207f11432bef7df100516eeb746843fa0486a222e3fd49cb
 BOOST_VERSION_FILE=$(echo ${BOOST_VERSION} | sed s/\\./_/g)
 
+# https://www.openssl.org/
 OPENSSL_VERSION=1.1.1k
 OPENSSL_SHA256=892a0875b9872acd04a9fde79b1f943075d5ea162415de3047c327df33fbaee5
 
-#LIBTORRENT_VERSION=95afba30e9acfd8411076a0b05f7ca69bf33b9bb # RC_2_0
-LIBTORRENT_VERSION=749c789e2424754b83991daacd811a53dd30e8d6 # RC_1_2
+# https://github.com/arvidn/libtorrent
+LIBTORRENT_VERSION=33a10d5a723a6c27d9baee7d9bf2028eb81c88ed # RC_1_2
 
+# https://github.com/oatpp/oatpp
 OATPP_VERSION=1.2.5
+
+# https://github.com/oatpp/oatpp-swagger
 OATPP_SWAGGER_VERSION=1.2.5
 
-MIMALLOC_VERSION=1.7.0
+# https://github.com/microsoft/mimalloc
+MIMALLOC_VERSION=2.0.1
 
+# https://cmake.org/
 CMAKE_VERSION=3.20.0
 
+# https://github.com/ianlancetaylor/libbacktrace
 BT_VERSION=4f57c999716847e45505b3df170150876b545088
