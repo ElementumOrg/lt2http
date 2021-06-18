@@ -10,6 +10,7 @@ GIT = git
 
 DOCKER = docker
 DOCKER_IMAGE = elementumorg/lt2http
+
 CMAKE = cmake
 
 LOCAL_PLATFORM=linux-x64
@@ -36,6 +37,10 @@ PLATFORMS = \
 	darwin-x64
 
 include platform_host.mk
+
+ifeq ($(CMAKE_BUILD_TYPE),)
+	CMAKE_BUILD_TYPE := Release
+endif
 
 ifneq ($(CROSS_TRIPLE),)
 	CC := $(CROSS_TRIPLE)-$(CC)
@@ -90,12 +95,12 @@ $(BUILD_PATH):
 	mkdir -p $(BUILD_PATH)
 
 $(BUILD_PATH)/$(OUTPUT_NAME): $(BUILD_PATH) force
-	rm -rf $(BUILD_PATH)
+	# rm -rf $(BUILD_PATH)
 	CC="$(CC)" CXX="$(CXX)" CROSS_TRIPLE="$(CROSS_TRIPLE)" \
 	$(CMAKE) -B $(BUILD_PATH) \
 		-DUSE_MIMALLOC=OFF \
 		-DUSE_STATIC=$(USE_STATIC) \
-		-DCMAKE_BUILD_TYPE=Release \
+		-DCMAKE_BUILD_TYPE=$(CMAKE_BUILD_TYPE) \
 		-DCMAKE_VERBOSE_MAKEFILE=ON \
 		-DCMAKE_CXX_STANDARD=$(CXXSTD) \
 		-DCMAKE_C_FLAGS="$(CFLAGS)" \

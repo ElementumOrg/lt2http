@@ -77,3 +77,19 @@ $ mkdir -p build && cd build
 $ cmake -DCMAKE_BUILD_TYPE=Release .. && make -j$(nproc)
 ```
 
+Build process helper:
+----------
+
+For easy of building there is `test_build.sh` with 3 options:
+```
+test_build.sh local # Run compilation on a local system, without Docker
+test_build.sh sanitize # Run compilation with CMake build type RelWithDebInfo, which includes sanitizers.
+test_build.sh docker # Run compilation in a Docker.
+```
+
+Prepare new target OS:
+----------
+- To build for specific OS, you need to create Dockerfile for that system.
+- Add it into Makefile's list of platforms.
+- Run Docker build with `PLATFORM=linux-x64 make env`, replace `linux-x64` with name of your Dockerfile.
+
