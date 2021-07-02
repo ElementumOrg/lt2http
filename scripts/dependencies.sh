@@ -64,7 +64,8 @@ mv libtorrent-`echo ${LIBTORRENT_VERSION} | sed 's/\\./_/g'`/ libtorrent
 echo
 echo "Downloading Oatpp, version: ${OATPP_VERSION}"
 if [ ! -f "${OATPP_VERSION}.tar.gz" ]; then
-  wget -q https://github.com/oatpp/oatpp/archive/refs/tags/${OATPP_VERSION}.tar.gz
+  # wget -q https://github.com/oatpp/oatpp/archive/refs/tags/${OATPP_VERSION}.tar.gz
+  wget -q https://github.com/ElementumOrg/oatpp/archive/`echo ${OATPP_VERSION} | sed 's/\\./_/g'`.tar.gz
 fi
 rm -rf oatpp
 tar -xzf ${OATPP_VERSION}.tar.gz
