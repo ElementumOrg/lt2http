@@ -11,7 +11,7 @@ function test {
 }
 
 GIT_VERSION=`git describe --tags`
-rm build/linux-x64/CMakeCache.txt 2>&1 >/dev/null
+rm -f build/linux-x64/CMakeCache.txt 2>&1 >/dev/null
 
 if [ "$1" == "local" ]
 then
