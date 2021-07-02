@@ -111,6 +111,8 @@ add_library(lt2http-base STATIC
     external/cpp-httplib/httplib.h
     external/json_struct/include/json_struct.h
 
+    utils/empty_body.h
+    utils/empty_body.cpp
     utils/exceptions.h
     utils/http_client.h
     utils/http_url.h
@@ -120,6 +122,8 @@ add_library(lt2http-base STATIC
     utils/path.h
     utils/pieces.h
     utils/requests.h
+    utils/stream_body.h
+    utils/stream_body.cpp
     utils/strings.h
     utils/system.h
 
