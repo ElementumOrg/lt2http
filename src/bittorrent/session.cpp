@@ -77,7 +77,7 @@ void Session::configure() {
     m_pack.set_bool(lt::settings_pack::upnp_ignore_nonrouters, true);
     m_pack.set_bool(lt::settings_pack::use_dht_as_fallback, false);
     m_pack.set_bool(lt::settings_pack::use_parole_mode, true);
-    m_pack.set_bool(lt::settings_pack::piece_priority_order, true);
+    // m_pack.set_bool(lt::settings_pack::piece_priority_order, true);
 
     // Disabling services, as they are enabled by default in libtorrent
     m_pack.set_bool(lt::settings_pack::enable_upnp, false);
