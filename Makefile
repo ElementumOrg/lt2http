@@ -52,7 +52,8 @@ include platform_target.mk
 
 include scripts/deps
 
-CMAKE_FLAGS = -DOPENSSL_ROOT_DIR=$(CROSS_ROOT)/ \
+CXXFLAGS += -DLH_VERSION="\\\"$(GIT_VERSION)\\\""
+CMAKE_FLAGS += -DOPENSSL_ROOT_DIR=$(CROSS_ROOT)/ \
 	-DCROSS_TRIPLE=$(CROSS_TRIPLE) -DCROSS_ROOT=$(CROSS_ROOT)
 
 ifeq ($(TARGET_OS), windows)
