@@ -10,7 +10,11 @@
 
 namespace lh {
 
+#ifdef LH_VERSION
+static std::string VERSION = LH_VERSION;
+#else 
 static std::string VERSION = "0.0.1";
+#endif
 
 const int file_readahead_pieces = 20;
 const std::int64_t memory_size_min = 40 * 1024 * 1024;
