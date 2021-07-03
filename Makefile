@@ -184,7 +184,11 @@ binaries:
 		mkdir -p build/binaries/$$i; \
 		cp -Rf build/$$i/out/* build/binaries/$$i/; \
 	done
-	cd build/binaries && git add * && git commit -m "Update to ${GIT_VERSION}" && git push origin master
+	cd build/binaries && \
+		git add * && \
+		git commit -m "Update to ${GIT_VERSION}" && \
+		git tag -f ${GIT_VERSION} && \
+		git push origin master --tags
 
 pull-all:
 	for i in $(PLATFORMS); do \
