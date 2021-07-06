@@ -79,17 +79,17 @@ class TorrentStatusDto : public oatpp::DTO {
     DTO_FIELD_INFO(seeding_time) {
         info->description = "Torrent is being seeding time (seconds)";
     }
-    DTO_FIELD(Int32, seeding_time);
+    DTO_FIELD(Int64, seeding_time);
 
     DTO_FIELD_INFO(finished_time) {
         info->description = "Torrent is being finished time (seconds)";
     }
-    DTO_FIELD(Int32, finished_time);
+    DTO_FIELD(Int64, finished_time);
 
     DTO_FIELD_INFO(active_time) {
         info->description = "Torrent is being active time (seconds)";
     }
-    DTO_FIELD(Int32, active_time);
+    DTO_FIELD(Int64, active_time);
 
     DTO_FIELD_INFO(total_download) {
         info->description = "Total downloaded (bytes)";
