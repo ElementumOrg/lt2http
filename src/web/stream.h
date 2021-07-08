@@ -29,9 +29,14 @@
 #include <utils/requests.h>
 #include <utils/strings.h>
 
+#include "web/basic_auth.h"
+
 #include OATPP_CODEGEN_BEGIN(ApiController)
 
 class StreamController : public oatpp::web::server::api::ApiController {
+  public:
+      std::shared_ptr<AuthorizationHandler> m_authHandler = std::make_shared<lh::CustomBasicAuthorizationHandler>();
+
   private:
     std::shared_ptr<oatpp::web::protocol::http::outgoing::Response> streamFile(const oatpp::String& hash_param, const oatpp::String& index_param, 
         const std::shared_ptr<IncomingRequest>& request) {
@@ -126,12 +131,21 @@ class StreamController : public oatpp::web::server::api::ApiController {
         info->pathParams.add<String>("infoHash").description = "Torrent InfoHash";
         info->pathParams.add<String>("index").description = "File index";
 
+        info->addSecurityRequirement("basic_auth");
+
         info->addResponse<oatpp::swagger::Binary>(Status::CODE_200, "application/octet-stream");
         info->addResponse<Object<FileOperationDto>>(Status::CODE_500, "application/json");
     }
-    ENDPOINT("HEAD", "/torrents/{infoHash}/files/{index}/stream/{file_name}", stream_head, PATH(String, hash_param, "infoHash"),
-             PATH(String, index_param, "index"),
-             REQUEST(std::shared_ptr<IncomingRequest>, request)) {
+    ENDPOINT("HEAD", "/torrents/{infoHash}/files/{index}/stream/{file_name}", stream_head, 
+            PATH(String, hash_param, "infoHash"),
+            PATH(String, index_param, "index"),
+            REQUEST(std::shared_ptr<IncomingRequest>, request),
+            AUTHORIZATION(std::shared_ptr<lh::CustomAuthorizationObject>, authObject, m_authHandler)
+    ) {
+        if (authObject == nullptr) {
+            return createResponse(Status::CODE_403, "");
+        };
+
         return streamFile(hash_param, index_param, request);
     }
 
@@ -141,12 +155,21 @@ class StreamController : public oatpp::web::server::api::ApiController {
         info->pathParams.add<String>("infoHash").description = "Torrent InfoHash";
         info->pathParams.add<String>("index").description = "File index";
 
+        info->addSecurityRequirement("basic_auth");
+
         info->addResponse<oatpp::swagger::Binary>(Status::CODE_206, "application/octet-stream");
         info->addResponse<Object<FileOperationDto>>(Status::CODE_500, "application/json");
     }
-    ENDPOINT("GET", "/torrents/{infoHash}/files/{index}/stream/{file_name}", stream, PATH(String, hash_param, "infoHash"),
-             PATH(String, index_param, "index"),
-             REQUEST(std::shared_ptr<IncomingRequest>, request)) {
+    ENDPOINT("GET", "/torrents/{infoHash}/files/{index}/stream/{file_name}", stream, 
+            PATH(String, hash_param, "infoHash"),
+            PATH(String, index_param, "index"),
+            REQUEST(std::shared_ptr<IncomingRequest>, request),
+            AUTHORIZATION(std::shared_ptr<lh::CustomAuthorizationObject>, authObject, m_authHandler)
+    ) {
+        if (authObject == nullptr) {
+            return createResponse(Status::CODE_403, "");
+        };
+
         return streamFile(hash_param, index_param, request);
     }
 };

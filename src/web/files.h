@@ -23,10 +23,14 @@
 #include <utils/requests.h>
 #include <utils/strings.h>
 
+#include "web/basic_auth.h"
+
 #include OATPP_CODEGEN_BEGIN(ApiController)
 
 class FilesController : public oatpp::web::server::api::ApiController {
   public:
+    std::shared_ptr<AuthorizationHandler> m_authHandler = std::make_shared<lh::CustomBasicAuthorizationHandler>();
+
     explicit FilesController(OATPP_COMPONENT(std::shared_ptr<ObjectMapper>, objectMapper))
         : oatpp::web::server::api::ApiController(objectMapper) {}
 
@@ -46,11 +50,21 @@ class FilesController : public oatpp::web::server::api::ApiController {
             "Define whether we need to start file buffering. Values: true/false. Default: false";
         info->queryParams.add<String>("buffer").required = false;
 
+        info->addSecurityRequirement("basic_auth");
+
         info->addResponse<Object<FileOperationDto>>(Status::CODE_200, "application/json");
         info->addResponse<Object<FileOperationDto>>(Status::CODE_500, "application/json");
     }
-    ENDPOINT("GET", "/torrents/{infoHash}/files/{index}/download", download, PATH(String, hash_param, "infoHash"),
-             PATH(String, index_param, "index"), QUERY(String, buffer_param, "buffer", "false")) {
+    ENDPOINT("GET", "/torrents/{infoHash}/files/{index}/download", download, 
+            PATH(String, hash_param, "infoHash"),
+            PATH(String, index_param, "index"), 
+            QUERY(String, buffer_param, "buffer", "false"),
+            AUTHORIZATION(std::shared_ptr<lh::CustomAuthorizationObject>, authObject, m_authHandler)
+    ) {
+        if (authObject == nullptr) {
+            return createResponse(Status::CODE_403, "");
+        };
+
         auto hash = uri_unescape(hash_param->std_str());
         auto index = -1;
 
@@ -95,11 +109,20 @@ class FilesController : public oatpp::web::server::api::ApiController {
         info->pathParams.add<String>("infoHash").description = "Torrent InfoHash";
         info->pathParams.add<String>("index").description = "File index";
 
+        info->addSecurityRequirement("basic_auth");
+
         info->addResponse<Object<FileOperationDto>>(Status::CODE_200, "application/json");
         info->addResponse<Object<FileOperationDto>>(Status::CODE_500, "application/json");
     }
-    ENDPOINT("GET", "/torrents/{infoHash}/files/{index}/stop", stop, PATH(String, hash_param, "infoHash"),
-             PATH(String, index_param, "index")) {
+    ENDPOINT("GET", "/torrents/{infoHash}/files/{index}/stop", stop, 
+            PATH(String, hash_param, "infoHash"),
+            PATH(String, index_param, "index"),
+            AUTHORIZATION(std::shared_ptr<lh::CustomAuthorizationObject>, authObject, m_authHandler)
+    ) {
+        if (authObject == nullptr) {
+            return createResponse(Status::CODE_403, "");
+        };
+
         auto hash = uri_unescape(hash_param->std_str());
         auto index = -1;
 
@@ -142,11 +165,21 @@ class FilesController : public oatpp::web::server::api::ApiController {
         info->pathParams.add<String>("infoHash").description = "Torrent InfoHash";
         info->pathParams.add<String>("index").description = "File index";
 
+        info->addSecurityRequirement("basic_auth");
+
         info->addResponse<Object<FileInfoDto>>(Status::CODE_200, "application/json");
         info->addResponse<Object<FileOperationDto>>(Status::CODE_500, "application/json");
     }
-    ENDPOINT("GET", "/torrents/{infoHash}/files/{index}/info", info, PATH(String, hash_param, "infoHash"),
-             PATH(String, index_param, "index"), HEADER(String, hostHeader, Header::HOST)) {
+    ENDPOINT("GET", "/torrents/{infoHash}/files/{index}/info", info, 
+            PATH(String, hash_param, "infoHash"),
+            PATH(String, index_param, "index"), 
+            HEADER(String, hostHeader, Header::HOST),
+            AUTHORIZATION(std::shared_ptr<lh::CustomAuthorizationObject>, authObject, m_authHandler)
+    ) {
+        if (authObject == nullptr) {
+            return createResponse(Status::CODE_403, "");
+        };
+
         auto hash = uri_unescape(hash_param->std_str());
         auto index = -1;
 
@@ -180,11 +213,20 @@ class FilesController : public oatpp::web::server::api::ApiController {
         info->pathParams.add<String>("infoHash").description = "Torrent InfoHash";
         info->pathParams.add<String>("index").description = "File index";
 
+        info->addSecurityRequirement("basic_auth");
+
         info->addResponse<Object<FileStatusDto>>(Status::CODE_200, "application/json");
         info->addResponse<Object<FileOperationDto>>(Status::CODE_500, "application/json");
     }
-    ENDPOINT("GET", "/torrents/{infoHash}/files/{index}/status", status, PATH(String, hash_param, "infoHash"),
-             PATH(String, index_param, "index")) {
+    ENDPOINT("GET", "/torrents/{infoHash}/files/{index}/status", status, 
+            PATH(String, hash_param, "infoHash"),
+            PATH(String, index_param, "index"),
+            AUTHORIZATION(std::shared_ptr<lh::CustomAuthorizationObject>, authObject, m_authHandler)
+    ) {
+        if (authObject == nullptr) {
+            return createResponse(Status::CODE_403, "");
+        };
+
         auto hash = uri_unescape(hash_param->std_str());
         auto index = -1;
 

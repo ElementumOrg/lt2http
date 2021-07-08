@@ -23,6 +23,7 @@
 #include <utils/path.h>
 #include <utils/strings.h>
 
+#include "web/basic_auth.h"
 
 #include OATPP_CODEGEN_BEGIN(ApiController)
 
@@ -30,6 +31,8 @@ namespace multipart = oatpp::web::mime::multipart;
 
 class SessionController : public oatpp::web::server::api::ApiController {
   public:
+    std::shared_ptr<AuthorizationHandler> m_authHandler = std::make_shared<lh::CustomBasicAuthorizationHandler>();
+
     explicit SessionController(OATPP_COMPONENT(std::shared_ptr<ObjectMapper>, objectMapper))
         : oatpp::web::server::api::ApiController(objectMapper) {}
 
@@ -42,9 +45,17 @@ class SessionController : public oatpp::web::server::api::ApiController {
     ENDPOINT_INFO(info) {
         info->summary = "Dump information for all running torrents";
 
+        info->addSecurityRequirement("basic_auth");
+        
         info->addResponse<String>(Status::CODE_200, "text/plain");
     }
-    ENDPOINT("GET", "/info", info) {
+    ENDPOINT("GET", "/info", info,
+        AUTHORIZATION(std::shared_ptr<lh::CustomAuthorizationObject>, authObject, m_authHandler)
+    ) {
+        if (authObject == nullptr) {
+            return createResponse(Status::CODE_403, "");
+        };
+
         std::stringstream ss;
         ss << "<!DOCTYPE html><html lang=\"en-US\"><head>"
             << "<title>lt2http Status</title>"
@@ -66,10 +77,18 @@ class SessionController : public oatpp::web::server::api::ApiController {
     ENDPOINT_INFO(status) {
         info->summary = "Show session status";
 
+        info->addSecurityRequirement("basic_auth");
+
         info->addResponse<Object<SessionStatusDto>>(Status::CODE_200, "application/json");
         info->addResponse<Object<ErrorDto>>(Status::CODE_500, "application/json");
     }
-    ENDPOINT("GET", "/status", status) {
+    ENDPOINT("GET", "/status", status,
+        AUTHORIZATION(std::shared_ptr<lh::CustomAuthorizationObject>, authObject, m_authHandler)
+    ) {
+        if (authObject == nullptr) {
+            return createResponse(Status::CODE_403, "");
+        };
+
         try {
             auto session = lh::session();
             return createDtoResponse(Status::CODE_200, sessionStatusDtoFromSession(session));
@@ -86,10 +105,18 @@ class SessionController : public oatpp::web::server::api::ApiController {
     ENDPOINT_INFO(resume) {
         info->summary = "Resume ression";
 
+        info->addSecurityRequirement("basic_auth");
+
         info->addResponse<Object<SessionOperationDto>>(Status::CODE_200, "application/json");
         info->addResponse<Object<SessionOperationDto>>(Status::CODE_500, "application/json");
     }
-    ENDPOINT("GET", "/resume", resume) {
+    ENDPOINT("GET", "/resume", resume,
+        AUTHORIZATION(std::shared_ptr<lh::CustomAuthorizationObject>, authObject, m_authHandler)
+    ) {
+        if (authObject == nullptr) {
+            return createResponse(Status::CODE_403, "");
+        };
+
         try {
             OATPP_LOGI("SessionController::resume", "Resuming session")
 
@@ -113,10 +140,18 @@ class SessionController : public oatpp::web::server::api::ApiController {
     ENDPOINT_INFO(pause) {
         info->summary = "Pause session";
 
+        info->addSecurityRequirement("basic_auth");
+
         info->addResponse<Object<SessionOperationDto>>(Status::CODE_200, "application/json");
         info->addResponse<Object<SessionOperationDto>>(Status::CODE_500, "application/json");
     }
-    ENDPOINT("GET", "/pause", pause) {
+    ENDPOINT("GET", "/pause", pause,
+        AUTHORIZATION(std::shared_ptr<lh::CustomAuthorizationObject>, authObject, m_authHandler)
+    ) {
+        if (authObject == nullptr) {
+            return createResponse(Status::CODE_403, "");
+        };
+
         try {
             OATPP_LOGI("SessionController::pause", "Pausing session")
 
@@ -147,13 +182,20 @@ class SessionController : public oatpp::web::server::api::ApiController {
             "Define which storage to use. Values: file/memory/automatic. Default: automatic (taken from confguration)";
         info->queryParams.add<String>("storage").required = false;
 
+        info->addSecurityRequirement("basic_auth");
+
         info->addResponse<Object<TorrentAddDto>>(Status::CODE_200, "application/json");
         info->addResponse<Object<TorrentAddDto>>(Status::CODE_500, "application/json");
     }
     ENDPOINT("POST", "/service/add/file", add_file, 
             QUERY(String, storage_param, "storage", "automatic"),
-            REQUEST(std::shared_ptr<IncomingRequest>, request)
+            REQUEST(std::shared_ptr<IncomingRequest>, request),
+            AUTHORIZATION(std::shared_ptr<lh::CustomAuthorizationObject>, authObject, m_authHandler)
     ) {
+        if (authObject == nullptr) {
+            return createResponse(Status::CODE_403, "");
+        };
+
         try {
             auto storage = lh::from_string<lh::storage_type_t, lh::js_storage_type_t_string_struct>(storage_param->c_str());
             auto multipart = std::make_shared<multipart::PartList>(request->getHeaders());
@@ -198,11 +240,20 @@ class SessionController : public oatpp::web::server::api::ApiController {
             "Define which storage to use. Values: file/memory/automatic. Default: automatic (taken from confguration)";
         info->queryParams.add<String>("storage").required = false;
 
+        info->addSecurityRequirement("basic_auth");
+
         info->addResponse<Object<TorrentAddDto>>(Status::CODE_200, "application/json");
         info->addResponse<Object<TorrentAddDto>>(Status::CODE_500, "application/json");
     }
-    ENDPOINT("GET", "/service/add/uri", add_uri, QUERY(String, uri_param, "uri", ""),
-             QUERY(String, storage_param, "storage", "automatic")) {
+    ENDPOINT("GET", "/service/add/uri", add_uri, 
+            QUERY(String, uri_param, "uri", ""),
+            QUERY(String, storage_param, "storage", "automatic"),
+            AUTHORIZATION(std::shared_ptr<lh::CustomAuthorizationObject>, authObject, m_authHandler)
+    ) {
+        if (authObject == nullptr) {
+            return createResponse(Status::CODE_403, "");
+        };
+
         try {
             auto uri = uri_unescape(uri_param->std_str());
             auto storage = lh::from_string<lh::storage_type_t, lh::js_storage_type_t_string_struct>(storage_param->c_str());

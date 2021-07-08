@@ -37,7 +37,9 @@ public:
             .setLicenseName("")
             .setLicenseUrl("")
 
-            .addServer(uri.c_str(), "server on localhost");
+            .addSecurityScheme("basic_auth", oatpp::swagger::DocumentInfo::SecuritySchemeBuilder::DefaultBasicAuthorizationSecurityScheme())
+
+            .addServer(uri.c_str(), "lt2http http server");
         
         return builder.build();
   }());
