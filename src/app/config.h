@@ -23,6 +23,8 @@ const std::int64_t disk_cache_size = 12 * 1024 * 1024;
 
 extern std::int64_t memory_size;
 extern std::string web_interface;
+extern std::string web_login;
+extern std::string web_password;
 extern int web_port;
 extern std::atomic<bool> is_closing;
 
@@ -56,6 +58,8 @@ struct Config {
     std::string write_config_file;
 
     std::string web_interface = "0.0.0.0";
+    std::string web_login;
+    std::string web_password;
     int web_port = 65225;
 
     storage_type_t download_storage = storage_type_t::memory;

@@ -16,7 +16,10 @@ namespace po = boost::program_options;
 namespace lh {
 
 std::int64_t memory_size = 0;
+
 std::string web_interface;
+std::string web_login;
+std::string web_password;
 int web_port = 0;
 
 std::atomic<bool> is_closing(false);
@@ -48,6 +51,10 @@ Config::Config(int &argc, char *argv[]) {
     config.add_options()
         ("web_interface",                   po::value<std::string>(&web_interface)->default_value(web_interface),
                                             "Select which interface to listen for HTTP server")
+        ("web_login",                       po::value<std::string>(&web_login)->default_value(web_login),
+                                            "Select which login to use for for HTTP server authentication")
+        ("web_password",                    po::value<std::string>(&web_password)->default_value(web_password),
+                                            "Select which password to use for HTTP server authentication")
         ("web_port",                        po::value<int>(&web_port)->default_value(web_port),
                                             "Select which port to listen for HTTP server")
 
