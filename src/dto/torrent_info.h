@@ -33,6 +33,11 @@ class TorrentInfoDto : public oatpp::DTO {
     }
     DTO_FIELD(Boolean, has_metadata);
 
+    DTO_FIELD_INFO(is_memory_storage) {
+        info->description = "Does this torrent run with memory storage (bool)";
+    }
+    DTO_FIELD(Boolean, is_memory_storage);
+
     DTO_FIELD(Object<TorrentStatusDto>, torrent_status);
 };
 
@@ -45,6 +50,7 @@ inline oatpp::Object<TorrentInfoDto> torrentInfoDtoFromTorrent(const std::shared
     dto->name = torrent->name().c_str();
     dto->size = torrent->size();
     dto->has_metadata = torrent->has_metadata();
+    dto->is_memory_storage = torrent->is_memory_storage();
 
     if (is_status)
         dto->torrent_status = torrentStatusDtoFromTorrent(torrent);
