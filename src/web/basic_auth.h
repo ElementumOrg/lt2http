@@ -1,41 +1,23 @@
 #pragma once
 
-#include <app/application.h>
-
 #include "oatpp/web/server/api/ApiController.hpp"
+#include "oatpp/web/server/handler/AuthorizationHandler.hpp"
+#include "oatpp/web/protocol/http/outgoing/ResponseFactory.hpp"
 
 namespace lh {
 
-class CustomAuthorizationObject : public oatpp::web::server::handler::AuthorizationObject {
-public:
+class AuthInterceptor : public oatpp::web::server::interceptor::RequestInterceptor {
+  private:
+    typedef oatpp::web::protocol::http::outgoing::Response OutgoingResponse;
+    typedef oatpp::web::protocol::http::Status Status;
+    typedef oatpp::web::protocol::http::outgoing::ResponseFactory ResponseFactory;
 
-  CustomAuthorizationObject(const oatpp::String& pAuthString)
-    : authString(pAuthString)
-  {}
+    oatpp::web::server::handler::BasicAuthorizationHandler m_authHandler;
 
-  oatpp::String authString;
+  public:
+    AuthInterceptor();
 
+    std::shared_ptr<OutgoingResponse> intercept(const std::shared_ptr<IncomingRequest>& request) override;
 };
 
-class CustomBasicAuthorizationHandler : public oatpp::web::server::handler::BasicAuthorizationHandler {
-public:
-
-    CustomBasicAuthorizationHandler()
-        : BasicAuthorizationHandler("lt2http")
-    {}
-
-    std::shared_ptr<AuthorizationObject> authorize(const oatpp::String& userId, const oatpp::String& password) override {
-        auto config = lh::config();
-        if (config.web_login.empty() && config.web_password.empty()) {
-            return std::make_shared<CustomAuthorizationObject>(userId + ":" + password);
-        } 
-        if (userId->std_str() == config.web_login && password->std_str() == config.web_password) {
-            return std::make_shared<CustomAuthorizationObject>(userId + ":" + password);
-        }
-        
-        return nullptr;
-  }
-
-};
-
-}
+} // namespace lh

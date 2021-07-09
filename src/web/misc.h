@@ -13,8 +13,6 @@
 
 class MiscController : public oatpp::web::server::api::ApiController {
   public:
-    std::shared_ptr<AuthorizationHandler> m_authHandler = std::make_shared<lh::CustomBasicAuthorizationHandler>();
-
     explicit MiscController(OATPP_COMPONENT(std::shared_ptr<ObjectMapper>, objectMapper))
         : oatpp::web::server::api::ApiController(objectMapper) {}
 
@@ -27,17 +25,9 @@ class MiscController : public oatpp::web::server::api::ApiController {
     ENDPOINT_INFO(index) {
         info->summary = "Index";
 
-        info->addSecurityRequirement("basic_auth");
-
         info->addResponse<String>(Status::CODE_200, "text/html");
     }
-    ENDPOINT("GET", "/", index,
-        AUTHORIZATION(std::shared_ptr<lh::CustomAuthorizationObject>, authObject, m_authHandler)
-    ) {
-        if (authObject == nullptr) {
-            return createResponse(Status::CODE_403, "");
-        };
-
+    ENDPOINT("GET", "/", index) {
         const char *html = "<html lang='en'>"
                            "  <head>"
                            "    <meta charset=utf-8/>"
@@ -54,17 +44,9 @@ class MiscController : public oatpp::web::server::api::ApiController {
     ENDPOINT_INFO(shutdown) {
         info->summary = "Shutdown application gracefully";
 
-        info->addSecurityRequirement("basic_auth");
-
         info->addResponse<String>(Status::CODE_200, "application/json");
     }
-    ENDPOINT("GET", "/shutdown", shutdown,
-        AUTHORIZATION(std::shared_ptr<lh::CustomAuthorizationObject>, authObject, m_authHandler)
-    ) {
-        if (authObject == nullptr) {
-            return createResponse(Status::CODE_403, "");
-        };
-
+    ENDPOINT("GET", "/shutdown", shutdown) {
         OATPP_LOGE("MiscController::shutdown", "Stopping application after /shutdown request")
         lh::set_close(true);
 

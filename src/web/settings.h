@@ -14,8 +14,6 @@
 
 class SettingsController : public oatpp::web::server::api::ApiController {
   public:
-    std::shared_ptr<AuthorizationHandler> m_authHandler = std::make_shared<lh::CustomBasicAuthorizationHandler>();
-
     explicit SettingsController(OATPP_COMPONENT(std::shared_ptr<ObjectMapper>, objectMapper))
         : oatpp::web::server::api::ApiController(objectMapper) {}
 
@@ -28,17 +26,9 @@ class SettingsController : public oatpp::web::server::api::ApiController {
     ENDPOINT_INFO(get) {
         info->summary = "Get global settings";
 
-        info->addSecurityRequirement("basic_auth");
-
         info->addResponse<String>(Status::CODE_200, "application/json");
     }
-    ENDPOINT("GET", "/settings/get", get,
-        AUTHORIZATION(std::shared_ptr<lh::CustomAuthorizationObject>, authObject, m_authHandler)
-    ) {
-        if (authObject == nullptr) {
-            return createResponse(Status::CODE_403, "");
-        };
-
+    ENDPOINT("GET", "/settings/get", get) {
         auto response = createResponse(Status::CODE_200, oatpp::String(JS::serializeStruct(lh::config()).c_str()));
         response->putHeader(Header::CONTENT_TYPE, "application/json");
         return response;
@@ -47,19 +37,12 @@ class SettingsController : public oatpp::web::server::api::ApiController {
     ENDPOINT_INFO(set) {
         info->summary = "Set global settings";
 
-        info->addSecurityRequirement("basic_auth");
-
         info->addConsumes<String>("application/json");
         info->addResponse<String>(Status::CODE_200, "application/json");
     }
     ENDPOINT("POST", "/settings/set", set, 
-        BODY_STRING(String, body),
-        AUTHORIZATION(std::shared_ptr<lh::CustomAuthorizationObject>, authObject, m_authHandler)
+        BODY_STRING(String, body)
     ) {
-        if (authObject == nullptr) {
-            return createResponse(Status::CODE_403, "");
-        };
-
         lh::Config &config = lh::config();
         JS::ParseContext context(body->c_str());
         auto err = context.parseTo(config);

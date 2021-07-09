@@ -25,8 +25,6 @@
 
 class TorrentsController : public oatpp::web::server::api::ApiController {
   public:
-    std::shared_ptr<AuthorizationHandler> m_authHandler = std::make_shared<lh::CustomBasicAuthorizationHandler>();
-
     explicit TorrentsController(OATPP_COMPONENT(std::shared_ptr<ObjectMapper>, objectMapper))
         : oatpp::web::server::api::ApiController(objectMapper) {}
 
@@ -43,19 +41,12 @@ class TorrentsController : public oatpp::web::server::api::ApiController {
             "Define whether we need to include torrent status fields. Values: true/false. Default: false";
         info->queryParams.add<String>("status").required = false;
 
-        info->addSecurityRequirement("basic_auth");
-
         info->addResponse<List<Object<TorrentInfoDto>>>(Status::CODE_200, "application/json");
         info->addResponse<Object<ErrorDto>>(Status::CODE_500, "application/json");
     }
     ENDPOINT("GET", "/torrents", list, 
-        QUERY(String, status_param, "status", "false"),
-        AUTHORIZATION(std::shared_ptr<lh::CustomAuthorizationObject>, authObject, m_authHandler)
+        QUERY(String, status_param, "status", "false") 
     ) {
-        if (authObject == nullptr) {
-            return createResponse(Status::CODE_403, "");
-        };
-
         try {
             auto is_status = uri_unescape(status_param->std_str()) == "true";
 
@@ -91,21 +82,14 @@ class TorrentsController : public oatpp::web::server::api::ApiController {
             "Define whether we need to remove downloaded files. Values: true/false. Default: false";
         info->queryParams.add<String>("deleteData").required = false;
 
-        info->addSecurityRequirement("basic_auth");
-
         info->addResponse<Object<TorrentOperationDto>>(Status::CODE_200, "application/json");
         info->addResponse<Object<TorrentOperationDto>>(Status::CODE_500, "application/json");
     }
     ENDPOINT("GET", "/torrents/{infoHash}/remove", remove, 
         PATH(String, hash_param, "infoHash"),
         QUERY(String, delete_files_param, "deleteFiles", "true"), 
-        QUERY(String, delete_data_param, "deleteData", "false"),
-        AUTHORIZATION(std::shared_ptr<lh::CustomAuthorizationObject>, authObject, m_authHandler)
+        QUERY(String, delete_data_param, "deleteData", "false")
     ) {
-        if (authObject == nullptr) {
-            return createResponse(Status::CODE_403, "");
-        };
-
         auto hash = uri_unescape(hash_param->std_str());
 
         try {
@@ -141,19 +125,12 @@ class TorrentsController : public oatpp::web::server::api::ApiController {
 
         info->pathParams.add<String>("infoHash").description = "Torrent InfoHash";
 
-        info->addSecurityRequirement("basic_auth");
-
         info->addResponse<Object<TorrentOperationDto>>(Status::CODE_200, "application/json");
         info->addResponse<Object<TorrentOperationDto>>(Status::CODE_500, "application/json");
     }
     ENDPOINT("GET", "/torrents/{infoHash}/resume", resume, 
-        PATH(String, hash_param, "infoHash"),
-        AUTHORIZATION(std::shared_ptr<lh::CustomAuthorizationObject>, authObject, m_authHandler)
+        PATH(String, hash_param, "infoHash")
     ) {
-        if (authObject == nullptr) {
-            return createResponse(Status::CODE_403, "");
-        };
-
         auto hash = uri_unescape(hash_param->std_str());
 
         try {
@@ -187,19 +164,12 @@ class TorrentsController : public oatpp::web::server::api::ApiController {
 
         info->pathParams.add<String>("infoHash").description = "Torrent InfoHash";
 
-        info->addSecurityRequirement("basic_auth");
-
         info->addResponse<Object<TorrentOperationDto>>(Status::CODE_200, "application/json");
         info->addResponse<Object<TorrentOperationDto>>(Status::CODE_500, "application/json");
     }
     ENDPOINT("GET", "/torrents/{infoHash}/pause", pause, 
-        PATH(String, hash_param, "infoHash"),
-        AUTHORIZATION(std::shared_ptr<lh::CustomAuthorizationObject>, authObject, m_authHandler)
+        PATH(String, hash_param, "infoHash")
     ) {
-        if (authObject == nullptr) {
-            return createResponse(Status::CODE_403, "");
-        };
-
         auto hash = uri_unescape(hash_param->std_str());
 
         try {
@@ -237,20 +207,13 @@ class TorrentsController : public oatpp::web::server::api::ApiController {
             "Define whether we need to include torrent status fields. Values: true/false. Default: false";
         info->queryParams.add<String>("status").required = false;
 
-        info->addSecurityRequirement("basic_auth");
-
         info->addResponse<Object<TorrentInfoDto>>(Status::CODE_200, "application/json");
         info->addResponse<Object<TorrentOperationDto>>(Status::CODE_500, "application/json");
     }
     ENDPOINT("GET", "/torrents/{infoHash}/info", info, 
         PATH(String, hash_param, "infoHash"),
-        QUERY(String, status_param, "status", "false"),
-        AUTHORIZATION(std::shared_ptr<lh::CustomAuthorizationObject>, authObject, m_authHandler)
+        QUERY(String, status_param, "status", "false")
     ) {
-        if (authObject == nullptr) {
-            return createResponse(Status::CODE_403, "");
-        };
-
         auto hash = uri_unescape(hash_param->std_str());
         auto is_status = uri_unescape(status_param->std_str()) == "true";
 
@@ -280,19 +243,12 @@ class TorrentsController : public oatpp::web::server::api::ApiController {
 
         info->pathParams.add<String>("infoHash").description = "Torrent InfoHash";
 
-        info->addSecurityRequirement("basic_auth");
-
         info->addResponse<Object<TorrentStatusDto>>(Status::CODE_200, "application/json");
         info->addResponse<Object<TorrentOperationDto>>(Status::CODE_500, "application/json");
     }
     ENDPOINT("GET", "/torrents/{infoHash}/status", status, 
-        PATH(String, hash_param, "infoHash"),
-        AUTHORIZATION(std::shared_ptr<lh::CustomAuthorizationObject>, authObject, m_authHandler)
+        PATH(String, hash_param, "infoHash")
     ) {
-        if (authObject == nullptr) {
-            return createResponse(Status::CODE_403, "");
-        };
-
         auto hash = uri_unescape(hash_param->std_str());
 
         try {
@@ -325,21 +281,14 @@ class TorrentsController : public oatpp::web::server::api::ApiController {
             "Define whether we need to include file status fields. Values: true/false. Default: false";
         info->queryParams.add<String>("status").required = false;
 
-        info->addSecurityRequirement("basic_auth");
-
         info->addResponse<List<Object<FileInfoDto>>>(Status::CODE_200, "application/json");
         info->addResponse<Object<TorrentOperationDto>>(Status::CODE_500, "application/json");
     }
     ENDPOINT("GET", "/torrents/{infoHash}/files", files, 
         PATH(String, hash_param, "infoHash"),
         QUERY(String, status_param, "status", "false"), 
-        HEADER(String, hostHeader, Header::HOST),
-        AUTHORIZATION(std::shared_ptr<lh::CustomAuthorizationObject>, authObject, m_authHandler)
+        HEADER(String, hostHeader, Header::HOST)
     ) {
-        if (authObject == nullptr) {
-            return createResponse(Status::CODE_403, "");
-        };
-
         auto hash = uri_unescape(hash_param->std_str());
         auto is_status = uri_unescape(status_param->std_str()) == "true";
 
@@ -378,19 +327,12 @@ class TorrentsController : public oatpp::web::server::api::ApiController {
 
         info->pathParams.add<String>("infoHash").description = "Torrent InfoHash";
 
-        info->addSecurityRequirement("basic_auth");
-
         // info->addResponse<Object<TorrentStatusDto>>(Status::CODE_200, "application/json");
         // info->addResponse<Object<TorrentOperationDto>>(Status::CODE_500, "application/json");
     }
     ENDPOINT("GET", "/torrents/{infoHash}/generate", generate, 
-        PATH(String, hash_param, "infoHash"),
-        AUTHORIZATION(std::shared_ptr<lh::CustomAuthorizationObject>, authObject, m_authHandler)
+        PATH(String, hash_param, "infoHash")
     ) {
-        if (authObject == nullptr) {
-            return createResponse(Status::CODE_403, "");
-        };
-
         auto hash = uri_unescape(hash_param->std_str());
 
         try {

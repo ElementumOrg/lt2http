@@ -127,6 +127,8 @@ add_library(lt2http-base STATIC
     utils/strings.h
     utils/system.h
 
+    web/basic_auth.h
+    web/basic_auth.cpp
     web/error_handler.h
     web/error_handler.cpp
     web/files.h

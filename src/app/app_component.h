@@ -22,6 +22,7 @@
 #include <app/config.h>
 #include <app/swagger.h>
 
+#include <web/basic_auth.h>
 #include <web/error_handler.h>
 #include <web/request_logger.h>
 
@@ -87,6 +88,9 @@ class AppComponent {
         // Enable CORS globally
         connectionHandler->addRequestInterceptor(std::make_shared<oatpp::web::server::interceptor::AllowOptionsGlobal>());
         connectionHandler->addResponseInterceptor(std::make_shared<oatpp::web::server::interceptor::AllowCorsGlobal>());
+
+        // Add authentication handler
+        connectionHandler->addRequestInterceptor(std::make_shared<lh::AuthInterceptor>());
 
         return connectionHandler;
     }());

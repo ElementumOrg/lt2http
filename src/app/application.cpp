@@ -69,7 +69,12 @@ void Application::run() const {
     lh::web_interface = m_config.web_interface;
     lh::web_port = m_config.web_port;
 
-    OATPP_LOGI("Application::run", "Initializing Web Server on http://%s:%d", web_interface.c_str(), web_port);
+    if (!m_config.web_login.empty() || !m_config.web_password.empty()) {
+        OATPP_LOGI("Application::run", "Initializing Web Server on http://%s:%d with authentication for %s:%s", 
+            web_interface.c_str(), web_port, m_config.web_login.c_str(), m_config.web_password.c_str());
+    } else {
+        OATPP_LOGI("Application::run", "Initializing Web Server on http://%s:%d", web_interface.c_str(), web_port);
+    }
 
     /* Register components in scope of run() */
     AppComponent components;
