@@ -129,7 +129,12 @@ struct Config {
     bool use_libtorrent_logging = false;
 
     Config() = default;
+    
     Config(int &argc, char *argv[]);
+
+    bool is_auth_needed() const {
+        return !web_login.empty() || !web_password.empty();
+    }
 
     JS_OBJECT(JS_MEMBER(web_interface), JS_MEMBER(web_port),
 
