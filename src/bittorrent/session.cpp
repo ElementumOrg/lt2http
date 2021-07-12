@@ -43,9 +43,6 @@ Session::Session(lh::Config &config) : m_config(config) {
     // Start lt:: services
     start_services();
 
-    // Load previous torrents
-    load_previous_torrents();
-
     // Start Alerts watcher in a separate thread
     std::thread alert_thread(&Session::consume_alerts, this);
     std::thread prioritize_thread(&Session::prioritize, this);
@@ -56,6 +53,11 @@ Session::Session(lh::Config &config) : m_config(config) {
 Session::~Session() = default;
 
 std::shared_ptr<Config> Session::config() { return std::shared_ptr<Config>(&m_config); }
+
+void Session::run() {
+    // Load previous torrents
+    load_previous_torrents();
+}
 
 void Session::configure() {
     auto user_agent = get_user_agent();

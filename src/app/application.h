@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cassert>
+#include <csignal>
 #include <atomic>
 
 #include <oatpp/network/Server.hpp>
@@ -12,6 +13,8 @@
 
 #include <web/error_handler.h>
 
+void signalHandler(int signum);
+
 namespace lh {
 
 class Application
@@ -20,6 +23,17 @@ public:
     static void init(int argc, char *argv[])
     {
         OATPP_LOGI("Application::init", "Initializing application");
+
+        // Redefine signal handler for proper logging.
+        std::signal(SIGINT, signalHandler);
+        std::signal(SIGABRT, signalHandler);
+        std::signal(SIGTERM, signalHandler);
+    #ifndef WIN32
+        std::signal(SIGKILL, signalHandler);
+    #endif
+        std::signal(SIGSEGV, signalHandler);
+
+        // Init single instance of application.
         static Application instance{argc, argv};
         _inst = &instance;
     }
@@ -34,7 +48,7 @@ public:
     Application& operator=(Application const&) = delete;
     Application& operator=(Application &&) = delete;
 
-    void run() const;
+    void run();
     void close();
     lh::Config& config();
     lh::Session& session();

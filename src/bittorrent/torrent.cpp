@@ -25,9 +25,11 @@
 namespace lh {
 
 Torrent::Torrent(std::shared_ptr<lt::session> nativeSession, const lt::torrent_handle &nativeHandle, const lh::storage_type_t st)
-    : m_nativeSession(std::move(nativeSession)), m_nativeHandle(nativeHandle),
-      m_nativeInfo(std::const_pointer_cast<lt::torrent_info>(nativeHandle.torrent_file())),
-      m_hash(to_hex(m_nativeHandle.info_hash())), m_storageType(st) {
+    : m_nativeSession(std::move(nativeSession))
+    , m_nativeHandle(nativeHandle)
+    , m_nativeInfo(std::const_pointer_cast<lt::torrent_info>(nativeHandle.torrent_file()))
+    , m_hash(to_hex(m_nativeHandle.info_hash()))
+    , m_storageType(st) {
     auto &config = lh::config();
     m_addedTime = std::chrono::system_clock::now();
 

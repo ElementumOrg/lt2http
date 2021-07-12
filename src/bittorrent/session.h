@@ -33,6 +33,7 @@ class Session {
     ~Session();
 
     std::shared_ptr<Config> config();
+    void run();
     void configure();
     void reconfigure();
     void start_services();

@@ -2,7 +2,6 @@
 
 #include <iostream>
 #include <memory>
-#include <csignal>
 
 #include <boost/stacktrace.hpp>
 #include <libtorrent/version.hpp>
@@ -16,25 +15,6 @@
 #include <web/stream.h>
 #include <web/swagger.h>
 #include <web/torrents.h>
-
-void signalHandler( int signum ) {
-    OATPP_LOGE("Application::signalHandler", "Got interrupt signal (%d). Stopping application gracefully", signum);
-    lh::set_close(true);
-
-    if (signum == SIGSEGV) {
-        std::cerr << boost::stacktrace::stacktrace();
-
-        // void *array[10];
-        // size_t size;
-
-        // // get void*'s for all entries on the stack
-        // size = backtrace(array, 10);
-
-        // // print out all the frames to stderr
-        // backtrace_symbols_fd(array, size, STDERR_FILENO);
-        // // exit(signum);
-    };
-}
 
 namespace lh {
 
@@ -55,16 +35,8 @@ lh::Session& Application::session() {
     return m_session;
 }
 
-void Application::run() const {
+void Application::run() {
     OATPP_LOGI("Application::run", "Starting lt2http, version: %s, Libtorrent version: %s", lh::VERSION.c_str(), LIBTORRENT_VERSION);
-
-    std::signal(SIGINT, signalHandler);
-    std::signal(SIGABRT, signalHandler);
-    std::signal(SIGTERM, signalHandler);
-#ifndef WIN32
-    std::signal(SIGKILL, signalHandler);
-#endif
-    std::signal(SIGSEGV, signalHandler);
 
     lh::web_interface = m_config.web_interface;
     lh::web_port = m_config.web_port;
@@ -123,6 +95,10 @@ void Application::run() const {
         return !lh::is_closing.load();
     };
 
+    // Run session run in a separate thread.
+    std::thread session_thread(&Session::run, m_session);
+    session_thread.detach();
+
     server.run(condition);
 
     OATPP_LOGI("Application::run", "Stopping Web Server");
@@ -143,4 +119,14 @@ void Application::close() {
     m_session.close();
 }
 
+}
+
+// Custom signal handler to print stacktrace and exit gracefully.
+void signalHandler( int signum ) {
+    OATPP_LOGE("Application::signalHandler", "Got interrupt signal (%d). Stopping application gracefully", signum);
+    lh::set_close(true);
+
+    if (signum == SIGSEGV) {
+        std::cerr << boost::stacktrace::stacktrace();
+    };
 }
