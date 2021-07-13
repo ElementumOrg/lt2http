@@ -234,8 +234,8 @@ void Session::configure() {
 
     OATPP_LOGI("Session::configure", "DownloadStorage: %s", storage_to_string(m_config.download_storage))
     if (is_memory_storage()) {
-        int need_size = m_config.buffer_size * 1024 * 1024 + int(m_config.end_buffer_size) * 1024 * 1024 + 8 * 1024 * 1024;
-        int msize = memory_size();
+        std::int64_t need_size = std::int64_t(m_config.buffer_size) * 1024 * 1024 + std::int64_t(m_config.end_buffer_size) * 1024 * 1024 + 8 * 1024 * 1024;
+        std::int64_t msize = memory_size();
 
         if (msize < need_size) {
             OATPP_LOGI("Session::configure", "Raising memory size (from %d) to fit all the buffer (to %d)",
@@ -789,7 +789,7 @@ void Session::trigger_resume_data() {
     }
 }
 
-std::int64_t Session::memory_size() const { return m_config.memory_size * 1024 * 1024; };
+std::int64_t Session::memory_size() const { return std::int64_t(m_config.memory_size) * 1024 * 1024; };
 
 bool Session::is_paused() const {
     return m_nativeSession->is_paused();

@@ -267,11 +267,11 @@ Config::Config(int &argc, char *argv[]) {
             }
 
             OATPP_LOGI("Config", "Total system memory: %s", humanize_bytes(total).c_str());
-            OATPP_LOGI("Config", "Automatically selected memory size: %s", humanize_bytes(memory_size*1024*1024).c_str());
+            OATPP_LOGI("Config", "Automatically selected memory size: %s", humanize_bytes(std::int64_t(memory_size)*1024*1024).c_str());
 
-            if (memory_size*1024*1024 > memory_size_max) {
+            if (std::int64_t(memory_size)*1024*1024 > memory_size_max) {
                 OATPP_LOGI("Config", "Selected memory size (%s) is bigger than maximum for auto-select (%s), so we decrease memory size to maximum allowed: %s", 
-                    humanize_bytes(memory_size*1024*1024).c_str(), humanize_bytes(memory_size_max).c_str(), humanize_bytes(memory_size_max).c_str());
+                    humanize_bytes(std::int64_t(memory_size)*1024*1024).c_str(), humanize_bytes(memory_size_max).c_str(), humanize_bytes(memory_size_max).c_str());
                 memory_size = memory_size_max / 1024/1024;
             }
         }

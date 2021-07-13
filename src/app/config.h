@@ -18,7 +18,7 @@ static std::string VERSION = "0.0.1";
 
 const int file_readahead_pieces = 20;
 const std::int64_t memory_size_min = 40 * 1024 * 1024;
-const std::int64_t memory_size_max = 300 * 1024 * 1024;
+const std::int64_t memory_size_max = 400 * 1024 * 1024;
 const std::int64_t disk_cache_size = 12 * 1024 * 1024;
 
 extern std::int64_t memory_size;
@@ -129,7 +129,7 @@ struct Config {
     bool use_libtorrent_logging = false;
 
     Config() = default;
-    
+
     Config(int &argc, char *argv[]);
 
     bool is_auth_needed() const {
