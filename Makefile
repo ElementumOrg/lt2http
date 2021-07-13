@@ -40,6 +40,7 @@ include platform_host.mk
 
 ifeq ($(CMAKE_BUILD_TYPE),)
 	CMAKE_BUILD_TYPE := Release
+	# CMAKE_BUILD_TYPE := RelWithDebInfo
 endif
 
 ifneq ($(CROSS_TRIPLE),)
