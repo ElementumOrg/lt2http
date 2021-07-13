@@ -1,9 +1,12 @@
 #pragma once
 
+#include <boost/algorithm/string/replace.hpp>
+
 #include "oatpp/core/macro/codegen.hpp"
 #include "oatpp/parser/json/mapping/ObjectMapper.hpp"
 #include "oatpp/web/server/api/ApiController.hpp"
 
+#include <app/changelog.h>
 #include <app/config.h>
 #include <app/application.h>
 
@@ -37,6 +40,28 @@ class MiscController : public oatpp::web::server::api::ApiController {
                            "  </body>"
                            "</html>";
         auto response = createResponse(Status::CODE_200, html);
+        response->putHeader(Header::CONTENT_TYPE, "text/html");
+        return response;
+    }
+
+    ENDPOINT_INFO(changelog) {
+        info->summary = "Changelog";
+
+        info->addResponse<String>(Status::CODE_200, "text/html");
+    }
+    ENDPOINT("GET", "/changelog", changelog) {
+        boost::replace_all(changes, "\n", "<br>");
+
+        std::string html = "<html lang='en'>"
+                           "  <head>"
+                           "    <meta charset=utf-8/>"
+                           "  </head>"
+                           "  <body>"
+                           +  changes +
+                           "  </body>"
+                           "</html>";
+
+        auto response = createResponse(Status::CODE_200, html.c_str());
         response->putHeader(Header::CONTENT_TYPE, "text/html");
         return response;
     }
