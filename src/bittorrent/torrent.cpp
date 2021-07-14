@@ -559,7 +559,9 @@ void Torrent::handle_save_resume_data_alert(const lt::save_resume_data_alert *p)
     of.write(b.data(), b.size());
 };
 
-void Torrent::handle_dht_reply_alert(const lt::dht_reply_alert *p) { update_tracker("DHT", "", p->num_peers); };
+void Torrent::handle_dht_reply_alert(const lt::dht_reply_alert *p) { 
+    update_tracker("DHT", "", p->num_peers); 
+};
 
 void Torrent::handle_tracker_reply_alert(const lt::tracker_reply_alert *p) {
     update_tracker(p->tracker_url(), p->message(), p->num_peers);
@@ -608,7 +610,7 @@ void Torrent::update_tracker(const std::string &name, std::string message, int n
         m_trackerInfos[name] = {};
 
     m_trackerInfos[name].lastMessage = std::move(message);
-    m_trackerInfos[name].numPeers = number;
+    m_trackerInfos[name].numPeers = std::max(number, m_trackerInfos[name].numPeers);
 }
 
 void Torrent::dump(std::stringstream &ss) {
@@ -683,13 +685,17 @@ void Torrent::dump(std::stringstream &ss) {
                                             [](const lt::announce_endpoint &endpoint) { return endpoint.is_working(); });
 
         for (auto &endpoint : tracker.endpoints) {
-            if (!endpoint.enabled)
-                continue;
-
             scrape_complete = std::max(scrape_complete, endpoint.scrape_complete);
             scrape_incomplete = std::max(scrape_incomplete, endpoint.scrape_incomplete);
             if (!endpoint.message.empty())
                 message = endpoint.message;
+        }
+
+        if (scrape_incomplete == -1) {
+            auto it = m_trackerInfos.find(tracker.url);
+            if (it != m_trackerInfos.end()) {
+                scrape_incomplete = it->second.numPeers;
+            }
         }
 
         ss << Fmt("        %-60s: %-3s seeds, %-3s peers, updating: %-5s, is_working: %-5s, message: %s\n", tracker.url.c_str(),
