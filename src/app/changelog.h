@@ -11,6 +11,8 @@ std::string changes = R""""(
     - Initial changelog creation.
     - Fixed issue with setting big amount of memory for memory storage.
     - Fixed issue with crashing app while auto loading torrents on startup.
+    - Changed way to monitor tracker peers.
+    - For streaming endpoints added file priority setter to ensure download for non-memory storage.
 
 <b>0.0.1-0.0.4:</b>
     - Initial implementation of lt2http.
