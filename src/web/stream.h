@@ -55,6 +55,11 @@ class StreamController : public oatpp::web::server::api::ApiController {
             auto torrent = lh::session().get_torrent(hash);
             auto file = torrent->get_file(index);
 
+            // Ensure file is set for download for non-memory storage.
+            if (!torrent->is_memory_storage() && file->priority() < lt::low_priority) {
+                file->set_priority(lt::low_priority);
+            }
+
             auto rangeHeader = request->getHeader(Header::RANGE);
             if (rangeHeader == nullptr || rangeHeader->getSize() == 0)
                 rangeHeader = "bytes=0-";
