@@ -7,6 +7,10 @@
 std::string changes = R""""(
 <b>Changes:</b>
 
+<b>0.0.6:</b>
+    - Fixed torrents autoload on startup.
+    - Fixed issue with trying to download non-existing pieces.
+
 <b>0.0.5:</b>
     - Initial changelog creation.
     - Fixed issue with setting big amount of memory for memory storage.
