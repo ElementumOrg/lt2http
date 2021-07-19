@@ -511,7 +511,7 @@ void Torrent::clear_piece_deadline(lt::piece_index_t index) {
 };
 
 void Torrent::prioritize_pieces(lt::piece_index_t start, lt::piece_index_t end) {
-    for (int i = start; i <= int(start) + 2; ++i) {
+    for (int i = start; i <= end; ++i) {
         if (m_nativeHandle.have_piece(i))
             continue;
 
