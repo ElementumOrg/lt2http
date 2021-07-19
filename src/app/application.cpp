@@ -6,6 +6,8 @@
 #include <boost/stacktrace.hpp>
 #include <libtorrent/version.hpp>
 
+#include <utils/async.h>
+
 #include <app/config.h>
 
 #include <web/files.h>
@@ -96,8 +98,7 @@ void Application::run() {
     };
 
     // Run session run in a separate thread.
-    std::thread session_thread(&Session::run, m_session);
-    session_thread.detach();
+    call_async([this] { m_session.run(); });
 
     server.run(condition);
 

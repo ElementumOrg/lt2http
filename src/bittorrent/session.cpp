@@ -21,6 +21,7 @@
 
 #include <bittorrent/reader.h>
 
+#include <utils/async.h>
 #include <utils/exceptions.h>
 #include <utils/numbers.h>
 #include <utils/path.h>
@@ -44,10 +45,8 @@ Session::Session(lh::Config &config) : m_config(config) {
     start_services();
 
     // Start Alerts watcher in a separate thread
-    std::thread alert_thread(&Session::consume_alerts, this);
-    std::thread prioritize_thread(&Session::prioritize, this);
-    alert_thread.detach();
-    prioritize_thread.detach();
+    call_async([this] { this->consume_alerts(); });
+    call_async([this] { this->prioritize(); });
 }
 
 Session::~Session() = default;
@@ -521,7 +520,7 @@ void Session::load_previous_torrents() {
         try {
             add_torrent(path, m_config.autoload_torrents_paused, lh::storage_type_t::file);
         } catch (std::exception &e) {
-            OATPP_LOGE("Session::load_previous_torrents", "Failed to load torrent '%s': %s", path.c_str(), ec.message().c_str());
+            OATPP_LOGE("Session::load_previous_torrents", "Failed to load torrent '%s': %s", path.c_str(), e.what());
         }
     }
 }
