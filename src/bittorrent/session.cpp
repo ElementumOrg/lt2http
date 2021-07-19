@@ -1,4 +1,10 @@
 #include "session.h"
+
+#include <chrono>
+#include <mutex>
+#include <stdexcept>
+#include <thread>
+
 #include "app/application.h"
 
 #include <libtorrent/alert_types.hpp>
@@ -15,10 +21,6 @@
 #include <oatpp/core/Types.hpp>
 #include <oatpp/core/base/Environment.hpp>
 
-#include <chrono>
-#include <stdexcept>
-#include <thread>
-
 #include <bittorrent/reader.h>
 
 #include <utils/async.h>
@@ -30,6 +32,9 @@
 using clk = std::chrono::steady_clock;
 
 namespace lh {
+
+// Lock for operations with m_torrents
+std::mutex torrentsMutex;
 
 Session::Session(lh::Config &config) : m_config(config) {
     OATPP_LOGI("Session", "Starting libtorrent session");
@@ -503,7 +508,9 @@ void Session::load_previous_torrents() {
     if (!m_config.autoload_torrents || m_config.torrents_path.empty())
         return;
 
+    torrentsMutex.lock();
     m_torrents.clear();
+    torrentsMutex.unlock();
 
     OATPP_LOGI("Session::load_previous_torrents", "Loading previous torrents from: %s", m_config.torrents_path.c_str());
     lt::error_code ec;
@@ -641,7 +648,10 @@ std::shared_ptr<Torrent> Session::add_torrent(std::string &uri, bool is_paused, 
         th.resume();
 
     auto torrent = std::make_shared<Torrent>(m_nativeSession, th, st);
+
+    torrentsMutex.lock();
     m_torrents.emplace_back(torrent);
+    torrentsMutex.unlock();
 
     if (torrent->has_metadata())
         torrent->on_metadata_received();
@@ -676,7 +686,9 @@ bool Session::remove_torrent(std::string &hash, bool is_delete_files, bool is_de
 
     auto match = std::find_if(m_torrents.begin(), m_torrents.end(),
                               [&hash](const std::shared_ptr<Torrent> &t) { return t->hash() == hash; });
+    torrentsMutex.lock();
     m_torrents.erase(match);
+    torrentsMutex.unlock();
 
     return true;
 }
