@@ -112,6 +112,7 @@ add_library(lt2http-base STATIC
     external/json_struct/include/json_struct.h
 
     utils/async.h
+    utils/date.h
     utils/empty_body.h
     utils/empty_body.cpp
     utils/exceptions.h
