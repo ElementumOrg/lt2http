@@ -895,7 +895,7 @@ void Session::remove_temporary_file(std::string &path) {
         return;
 
     // Check if file has a temporary prefix to avoid removing non-temporary files.
-    if (path.find("/tmp_") == std::string::npos)
+    if (path.find("tmp_") == std::string::npos)
         return;
 
     OATPP_LOGI("Session::remove_temporary_file", "Removing temporary file at: %s", path.c_str());
