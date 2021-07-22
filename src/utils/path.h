@@ -11,11 +11,24 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
+#ifdef TORRENT_WINDOWS
+#include <direct.h> // for _mkdir and _getcwd
+#endif
+
+#ifdef _WIN32
+
+#include <windows.h>
+#include <conio.h>
+
+#else
+
 #include <termios.h>
 #include <sys/ioctl.h>
 #include <csignal>
 #include <utility>
 #include <dirent.h>
+
+#endif
 
 #include <libtorrent/error_code.hpp>
 #include <libtorrent/string_view.hpp>
