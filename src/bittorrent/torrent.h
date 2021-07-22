@@ -93,7 +93,7 @@ class Torrent : public std::enable_shared_from_this<lh::Torrent> {
     bool m_isClosing = false;
 
   public:
-    Torrent(std::shared_ptr<lt::session> nativeSession, const lt::torrent_handle &nativeHandle, lh::storage_type_t st);
+    Torrent(std::shared_ptr<lt::session> nativeSession, const lt::torrent_handle &nativeHandle, lh::storage_type_t st, std::chrono::time_point<std::chrono::system_clock> added_time);
     ~Torrent();
 
     std::shared_ptr<Torrent> get_shared_ptr() {

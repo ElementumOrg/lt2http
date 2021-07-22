@@ -18,20 +18,24 @@
 #include <bittorrent/reader.h>
 #include <bittorrent/session.h>
 
+#include <utils/date.h>
 #include <utils/numbers.h>
 #include <utils/path.h>
 #include <utils/strings.h>
 
+using namespace date;
+using namespace std::chrono;
+
 namespace lh {
 
-Torrent::Torrent(std::shared_ptr<lt::session> nativeSession, const lt::torrent_handle &nativeHandle, const lh::storage_type_t st)
+Torrent::Torrent(std::shared_ptr<lt::session> nativeSession, const lt::torrent_handle &nativeHandle, const lh::storage_type_t st, std::chrono::time_point<std::chrono::system_clock> added_time)
     : m_nativeSession(std::move(nativeSession))
     , m_nativeHandle(nativeHandle)
     , m_nativeInfo(std::const_pointer_cast<lt::torrent_info>(nativeHandle.torrent_file()))
     , m_hash(to_hex(m_nativeHandle.info_hash()))
-    , m_storageType(st) {
+    , m_storageType(st)
+    , m_addedTime(added_time) {
     auto &config = lh::config();
-    m_addedTime = std::chrono::system_clock::now();
 
     m_torrentFile = torrent_file(config.torrents_path, m_hash);
     m_resumeFile = resume_file(config.torrents_path, m_hash);

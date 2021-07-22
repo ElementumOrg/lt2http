@@ -170,7 +170,7 @@ class SessionController : public oatpp::web::server::api::ApiController {
 
             save_file(uri, file->getInMemoryData()->c_str(), file->getInMemoryData()->getSize());
 
-            auto torrent = lh::session().add_torrent(uri, false, storage);
+            auto torrent = lh::session().add_torrent(uri, false, storage, true, std::chrono::system_clock::now());
 
             auto dto = TorrentAddDto::createShared();
             dto->success = true;
@@ -214,6 +214,8 @@ class SessionController : public oatpp::web::server::api::ApiController {
                 OATPP_LOGI("SessionController::add_uri", "Downloading torrent file from: %s", uri.c_str());
 
                 auto res = do_request(uri);
+                if (res == nullptr)
+                    throw lh::Exception(Fmt("Could not download file from url '%s'. Response: null", uri.c_str()));
                 if (res->status != 200)
                     throw lh::Exception(Fmt("Could not download file from url '%s'. Status: %d", uri.c_str(), res->status));
 
@@ -224,7 +226,7 @@ class SessionController : public oatpp::web::server::api::ApiController {
                 save_file(uri, res->body.c_str(), res->body.size());
             }
 
-            auto torrent = lh::session().add_torrent(uri, false, storage);
+            auto torrent = lh::session().add_torrent(uri, false, storage, true, std::chrono::system_clock::now());
 
             auto dto = TorrentAddDto::createShared();
             dto->success = true;
