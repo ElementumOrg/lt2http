@@ -500,6 +500,7 @@ void Session::close() {
     // Stop lt:: services
     stop_services();
 
+    std::lock_guard<std::mutex> guard(torrentsMutex);
     for (const auto &t : m_torrents)
         t->files().clear();
 }
@@ -664,6 +665,8 @@ std::shared_ptr<Torrent> Session::add_torrent(std::string &uri, bool is_paused, 
 std::vector<std::shared_ptr<Torrent>> Session::torrents() { return m_torrents; }
 
 std::shared_ptr<Torrent> Session::get_torrent(std::string &hash) {
+    std::lock_guard<std::mutex> guard(torrentsMutex);
+
     auto match =
         std::find_if(m_torrents.begin(), m_torrents.end(), [&hash](const std::shared_ptr<Torrent>& t) { return t->hash() == hash; });
     if (match == m_torrents.end())
@@ -673,6 +676,8 @@ std::shared_ptr<Torrent> Session::get_torrent(std::string &hash) {
 }
 
 bool Session::has_torrent(std::string &hash) {
+    std::lock_guard<std::mutex> guard(torrentsMutex);
+
     auto match = std::find_if(m_torrents.begin(), m_torrents.end(),
                               [&hash](const std::shared_ptr<Torrent> &t) { return t->hash() == hash; });
     return match != m_torrents.end();
@@ -684,11 +689,11 @@ bool Session::remove_torrent(std::string &hash, bool is_delete_files, bool is_de
 
     OATPP_LOGI("Session::remove_torrent", "Removed torrent with hash: %s", torrent->hash().c_str());
 
+    std::lock_guard<std::mutex> guard(torrentsMutex);
+
     auto match = std::find_if(m_torrents.begin(), m_torrents.end(),
                               [&hash](const std::shared_ptr<Torrent> &t) { return t->hash() == hash; });
-    torrentsMutex.lock();
     m_torrents.erase(match);
-    torrentsMutex.unlock();
 
     return true;
 }
@@ -795,6 +800,8 @@ void Session::remove_temporary_file(std::string &path) {
 }
 
 void Session::trigger_resume_data() {
+    std::lock_guard<std::mutex> guard(torrentsMutex);
+
     for (const auto &torrent : m_torrents) {
         torrent->save_resume_data();
     }
