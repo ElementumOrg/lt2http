@@ -7,6 +7,10 @@
 std::string changes = R""""(
 <b>Changes:</b>
 
+<b>0.0.7:</b>
+    - Added additional trackers modification for added torrents.
+    - Added support for setting libtorrent profile (not recommended, it can drop settings, customized by user).
+
 <b>0.0.6:</b>
     - Fixed torrents autoload on startup.
     - Fixed issue with trying to download non-existing pieces.
