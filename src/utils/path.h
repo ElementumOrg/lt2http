@@ -1,5 +1,6 @@
 #pragma once
 
+#include <ctime>
 #include <iostream>
 #include <fstream>
 #include <ios>
@@ -7,26 +8,14 @@
 #include <unistd.h>
 #include <vector>
 
-#ifdef TORRENT_WINDOWS
-#include <direct.h> // for _mkdir and _getcwd
 #include <sys/stat.h>
-#include <sys/types.h> // for _stat
-#endif
-
-#ifdef _WIN32
-
-#include <windows.h>
-#include <conio.h>
-
-#else
+#include <sys/types.h>
 
 #include <termios.h>
 #include <sys/ioctl.h>
 #include <csignal>
 #include <utility>
 #include <dirent.h>
-
-#endif
 
 #include <libtorrent/error_code.hpp>
 #include <libtorrent/string_view.hpp>
@@ -197,3 +186,10 @@ inline void remove_file(std::string &path) {
     std::remove(path.c_str());
 };
 
+inline std::time_t modtime_file(std::string &path) {
+    struct stat result;
+    if (stat(path.c_str(), &result) == 0) {
+        return result.st_ctime;
+    }    
+    return {};
+}
