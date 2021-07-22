@@ -155,6 +155,11 @@ void Session::configure() {
     m_pack.set_int(lt::settings_pack::download_rate_limit, 0);
     m_pack.set_int(lt::settings_pack::upload_rate_limit, 0);
 
+    if (m_config.libtorrent_profile == lh::lt_profile_t::minimal_memory)
+        m_pack = lt::min_memory_usage();
+    else if (m_config.libtorrent_profile == lh::lt_profile_t::high_speed)
+        m_pack = lt::high_performance_seed();
+
     // For Android external storage / OS-mounted NAS setups
     if (m_config.tuned_storage && !is_memory_storage()) {
         m_pack.set_bool(lt::settings_pack::use_read_cache, true);
@@ -359,6 +364,9 @@ void Session::reconfigure() {
     OATPP_LOGI("Session::reconfigure", "Reconfiguring libtorrent session");
     m_config = lh::config();
     configure();
+    
+    // Apply settings
+    m_nativeSession->apply_settings(m_pack);
 }
 
 void Session::start_services() {
