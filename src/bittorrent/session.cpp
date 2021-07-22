@@ -6,6 +6,7 @@
 #include <thread>
 
 #include "app/application.h"
+#include "app/config.h"
 
 #include <libtorrent/alert_types.hpp>
 #include <libtorrent/bdecode.hpp>
@@ -25,6 +26,7 @@
 
 #include <utils/async.h>
 #include <utils/exceptions.h>
+#include <utils/http_client.h>
 #include <utils/numbers.h>
 #include <utils/path.h>
 #include <utils/strings.h>
@@ -35,6 +37,26 @@ namespace lh {
 
 // Lock for operations with m_torrents
 std::mutex torrentsMutex;
+
+const std::string extraTrackersURLTemplate = "https://ngosang.github.io/trackerslist/trackers_%s.txt";
+const std::vector<std::string> defaultTrackers = {
+    "http://bt4.t-ru.org/ann",
+    "http://retracker.mgts.by:80/announce",
+    "http://tracker.city9x.com:2710/announce",
+    "http://tracker.electro-torrent.pl:80/announce",
+    "http://tracker.internetwarriors.net:1337/announce",
+    "http://bt.svao-ix.ru/announce",
+
+    "udp://tracker.opentrackr.org:1337/announce",
+    "udp://tracker.coppersurfer.tk:6969/announce",
+    "udp://tracker.leechers-paradise.org:6969/announce",
+    "udp://tracker.openbittorrent.com:80/announce",
+    "udp://public.popcorn-tracker.org:6969/announce",
+    "udp://explodie.org:6969",
+    "udp://46.148.18.250:2710",
+    "udp://opentor.org:2710",
+};
+std::vector<std::string> extraTrackers;
 
 Session::Session(lh::Config &config) : m_config(config) {
     OATPP_LOGI("Session", "Starting libtorrent session");
@@ -59,7 +81,10 @@ Session::~Session() = default;
 std::shared_ptr<Config> Session::config() { return std::shared_ptr<Config>(&m_config); }
 
 void Session::run() {
-    // Load previous torrents
+    // Load additional trackers if needed.
+    load_trackers();
+
+    // Load previous torrents.
     load_previous_torrents();
 }
 
@@ -436,7 +461,7 @@ void Session::consume_alerts() {
                 handle_metadata_received_alert(static_cast<const lt::metadata_received_alert *>(a));
                 break;
             default:
-                OATPP_LOGI("Session::consume_alerts", "Alert: %s, Message: %s", a->what(), a->message().c_str());
+                OATPP_LOGD("Session::consume_alerts", "Alert: %s, Message: %s", a->what(), a->message().c_str());
             }
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
@@ -479,7 +504,7 @@ void Session::prioritize() {
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
         if (lh::is_closing) {
-            OATPP_LOGI("Session::consume_alerts", "Stop alert processing due to closing application");
+            OATPP_LOGI("Session::prioritize", "Stop prioritizer due to closing application");
             return;
         }
     }
@@ -526,14 +551,64 @@ void Session::load_previous_torrents() {
     for (auto &p : entries) {
         std::string path = path_append(m_config.torrents_path, p);
         try {
-            add_torrent(path, m_config.autoload_torrents_paused, lh::storage_type_t::file);
+            add_torrent(
+                path, 
+                m_config.autoload_torrents_paused, 
+                lh::storage_type_t::file, 
+                false, 
+                std::chrono::system_clock::from_time_t(modtime_file(path))
+            );
         } catch (std::exception &e) {
             OATPP_LOGE("Session::load_previous_torrents", "Failed to load torrent '%s': %s", path.c_str(), e.what());
         }
     }
 }
 
-std::shared_ptr<Torrent> Session::add_torrent(std::string &uri, bool is_paused, lh::storage_type_t st) {
+void Session::load_trackers() {
+    if (m_config.add_extra_trackers == lh::extra_trackers_t::none) {
+        return;
+    }
+
+    OATPP_LOGD("Session::load_trackers", "Loading trackers with selection: %s", lh::extra_trackers_to_string(m_config.add_extra_trackers))
+    extraTrackers.clear();
+    for (const auto &t : defaultTrackers) {
+        extraTrackers.emplace_back(t);
+    }
+
+    if (m_config.add_extra_trackers == lh::extra_trackers_t::minimum) {
+        return;
+    }
+
+    auto uri = Fmt(extraTrackersURLTemplate, extra_trackers_to_string(m_config.add_extra_trackers));
+    OATPP_LOGD("Session::load_trackers", "Downloading tracker from url: %s", uri.c_str());
+
+    auto res = do_request(uri);
+    if (!res) {
+        OATPP_LOGE("Could not download file from url '%s'. Response is null", uri.c_str());
+        return;
+    } 
+    if (res->status != 200) {
+        OATPP_LOGE("Could not download file from url '%s'. Status: %d", uri.c_str(), res->status);
+        return;
+    }
+
+    std::stringstream ss(res->body);
+    std::string line;
+
+    while(std::getline(ss, line,'\n')){
+        boost::trim(line);
+
+        if (line.empty())
+            continue;
+        
+        extraTrackers.emplace_back(line);
+    }
+
+    OATPP_LOGD("Session::load_trackers", "Using %d extra trackers", extraTrackers.size());
+}
+
+std::shared_ptr<Torrent> Session::add_torrent(std::string &uri, bool is_paused, lh::storage_type_t st, 
+    bool is_first_time, std::chrono::time_point<std::chrono::system_clock> added_time) {
     // Trim whitespaces
     boost::trim(uri);
     if (uri.empty())
@@ -635,7 +710,27 @@ std::shared_ptr<Torrent> Session::add_torrent(std::string &uri, bool is_paused, 
             p.file_priorities.push_back(lt::download_priority_t{0});
     }
 
-    OATPP_LOGI("Session::add_torrent", "Setting sequential download to: %s", !is_memory_storage ? "true" : "false");
+    OATPP_LOGD("Session::add_torrent", "Loaded torrent has %d trackers", p.trackers.size());
+    auto is_private = p.ti ? p.ti->priv() : false;
+    if (!is_private 
+        && ((m_config.modify_trackers_strategy == lh::modify_trackers_t::first_time && is_first_time) 
+            || m_config.modify_trackers_strategy == lh::modify_trackers_t::each_time)
+    ) {
+        // Remove original trackers if configured so
+        if (m_config.remove_original_trackers)
+            p.trackers.clear();
+        
+        // Add trackers to torrent info
+        for (auto &tr : extraTrackers) {
+            if (std::find_if(p.trackers.begin(), p.trackers.end(),
+                    [&tr](const std::string &t) { return t == tr; }) == p.trackers.end())
+                p.trackers.emplace_back(tr);
+        }
+
+        OATPP_LOGD("Session::add_torrent", "Updated torrent info has %d trackers", p.trackers.size());
+    }
+
+    OATPP_LOGD("Session::add_torrent", "Setting sequential download to: %s", !is_memory_storage ? "true" : "false");
     if (!is_memory_storage)
         p.flags |= lt::torrent_flags::sequential_download;
     else
@@ -648,7 +743,7 @@ std::shared_ptr<Torrent> Session::add_torrent(std::string &uri, bool is_paused, 
     if (!is_paused)
         th.resume();
 
-    auto torrent = std::make_shared<Torrent>(m_nativeSession, th, st);
+    auto torrent = std::make_shared<Torrent>(m_nativeSession, th, st, added_time);
 
     torrentsMutex.lock();
     m_torrents.emplace_back(torrent);

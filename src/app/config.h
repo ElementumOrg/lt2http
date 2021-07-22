@@ -39,6 +39,12 @@ JS_ENUM(auto_memory_strategy_type_t, min, standard, max);
 JS_ENUM(user_agent_type_t, lt2http, transmission_1_9_3, transmission_2_9_2, libtorrent_1_1_0, libtorrent_1_2_0, bittorrent_7_4_3,
         bittorrent_7_5_0, utorrent_2_2_1, utorrent_3_2_0, utorrent_3_4_9, deluge_1_3_6_0, deluge_1_3_12_0, vuze_5_7_3_0)
 
+JS_ENUM(extra_trackers_t, none, all, best, minimum);
+
+JS_ENUM(modify_trackers_t, first_time, each_time);
+
+JS_ENUM(lt_profile_t, default_profile, minimal_memory, high_speed);
+
 inline char const *storage_to_string(lh::storage_type_t s) {
     switch (s) {
     case lh::storage_type_t::automatic:
@@ -49,6 +55,21 @@ inline char const *storage_to_string(lh::storage_type_t s) {
         return "Memory";
     default:
         return "<>";
+    }
+}
+
+inline char const *extra_trackers_to_string(lh::extra_trackers_t s) {
+    switch (s) {
+    case lh::extra_trackers_t::none:
+        return "none";
+    case lh::extra_trackers_t::all:
+        return "all";
+    case lh::extra_trackers_t::best:
+        return "best";
+    case lh::extra_trackers_t::minimum:
+        return "minimum";
+    default:
+        return "";
     }
 }
 
@@ -128,6 +149,12 @@ struct Config {
 
     bool use_libtorrent_logging = false;
 
+    bool remove_original_trackers = false;
+    extra_trackers_t add_extra_trackers = extra_trackers_t::best;
+    modify_trackers_t modify_trackers_strategy = modify_trackers_t::first_time;
+
+    lt_profile_t libtorrent_profile = lt_profile_t::default_profile;
+
     Config() = default;
 
     Config(int &argc, char *argv[]);
@@ -170,7 +197,12 @@ struct Config {
               JS_MEMBER(proxy_enabled), JS_MEMBER(proxy_type), JS_MEMBER(proxy_host), JS_MEMBER(proxy_port),
               JS_MEMBER(proxy_login), JS_MEMBER(proxy_password), JS_MEMBER(use_proxy_tracker), JS_MEMBER(use_proxy_download),
 
-              JS_MEMBER(use_libtorrent_logging));
+              JS_MEMBER(use_libtorrent_logging),
+
+              JS_MEMBER(remove_original_trackers), JS_MEMBER(add_extra_trackers), JS_MEMBER(modify_trackers_strategy),
+
+              JS_MEMBER(libtorrent_profile)
+            );
 };
 
 // Helper template to convert enum to string and vice versa.
@@ -198,3 +230,6 @@ JS_ENUM_NAMESPACE_DECLARE_STRING_PARSER(lh, encryption_type_t);
 JS_ENUM_NAMESPACE_DECLARE_STRING_PARSER(lh, storage_type_t);
 JS_ENUM_NAMESPACE_DECLARE_STRING_PARSER(lh, auto_memory_strategy_type_t);
 JS_ENUM_NAMESPACE_DECLARE_STRING_PARSER(lh, user_agent_type_t);
+JS_ENUM_NAMESPACE_DECLARE_STRING_PARSER(lh, extra_trackers_t);
+JS_ENUM_NAMESPACE_DECLARE_STRING_PARSER(lh, modify_trackers_t);
+JS_ENUM_NAMESPACE_DECLARE_STRING_PARSER(lh, lt_profile_t);

@@ -43,9 +43,10 @@ class Session {
     void request_update();
     void close();
     void load_previous_torrents();
+    void load_trackers();
 
     std::vector<std::shared_ptr<Torrent>> torrents();
-    std::shared_ptr<Torrent> add_torrent(std::string &uri, bool is_paused, lh::storage_type_t st);
+    std::shared_ptr<Torrent> add_torrent(std::string &uri, bool is_paused, lh::storage_type_t st, bool is_first_time, std::chrono::time_point<std::chrono::system_clock> added_time);
     std::shared_ptr<Torrent> get_torrent(std::string &hash);
     bool has_torrent(std::string &hash);
     bool remove_torrent(std::string &hash, bool is_delete_files, bool is_delete_data);
