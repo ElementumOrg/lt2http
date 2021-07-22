@@ -748,7 +748,7 @@ void Torrent::save_resume_data() const {
 }
 
 void Torrent::save_torrent_file() const {
-    if (!has_metadata() || is_memory_storage())
+    if (!has_metadata() || is_memory_storage() || file_exists(m_torrentFile))
         return;
 
     OATPP_LOGI("Torrent::save_torrent_file", "Saving torrent file to: %s", m_torrentFile.c_str());
