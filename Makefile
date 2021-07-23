@@ -100,7 +100,7 @@ $(BUILD_PATH)/$(OUTPUT_NAME): $(BUILD_PATH) force
 	# rm -rf $(BUILD_PATH)
 	CC="$(CC)" CXX="$(CXX)" CROSS_TRIPLE="$(CROSS_TRIPLE)" \
 	$(CMAKE) -B $(BUILD_PATH) \
-		-DUSE_MIMALLOC=OFF \
+		-DUSE_MIMALLOC=$(USE_MIMALLOC) \
 		-DUSE_STATIC=$(USE_STATIC) \
 		-DCMAKE_BUILD_TYPE=$(CMAKE_BUILD_TYPE) \
 		-DCMAKE_VERBOSE_MAKEFILE=ON \
@@ -143,7 +143,7 @@ distclean:
 build: force
 ifeq ($(TARGET_OS), windows)
 endif	
-	$(DOCKER) run --rm -v $(shell pwd):/lt2http --ulimit memlock=67108864 -w /lt2http $(DOCKER_IMAGE):$(TARGET_OS)-$(TARGET_ARCH) make dist TARGET_OS=$(TARGET_OS) TARGET_ARCH=$(TARGET_ARCH) GIT_VERSION=$(GIT_VERSION)
+	$(DOCKER) run --rm -v $(shell pwd):/lt2http --ulimit memlock=67108864 -w /lt2http $(DOCKER_IMAGE):$(TARGET_OS)-$(TARGET_ARCH) make dist TARGET_OS=$(TARGET_OS) TARGET_ARCH=$(TARGET_ARCH) GIT_VERSION=$(GIT_VERSION) USE_MIMALLOC=$(USE_MIMALLOC)
 
 docker: force
 	$(DOCKER) run --rm -v $(shell pwd):/lt2http --ulimit memlock=67108864 -w /lt2http $(DOCKER_IMAGE):$(TARGET_OS)-$(TARGET_ARCH)
