@@ -33,7 +33,7 @@ cd boost_${BOOST_VERSION_FILE}
 
 echo "using ${BOOST_CC} : ${BOOST_OS} : ${CROSS_TRIPLE}-${BOOST_CXX} ${BOOST_FLAGS} ;" > ${HOME}/user-config.jam
 export PATH="$CROSS_ROOT/bin:$PATH"
-run ./b2 --with-date_time --with-system --with-chrono --with-random --with-program_options --prefix=${CROSS_ROOT} \
+run ./b2 --with-date_time --with-system --with-chrono --with-random --with-program_options --with-filesystem --prefix=${CROSS_ROOT} \
   toolset=${BOOST_CC}-${BOOST_OS} ${BOOST_OPTS} link=static variant=release ${BOOST_STATIC} threading=multi \
   target-os=${BOOST_TARGET_OS} install
 rm -rf `pwd`
