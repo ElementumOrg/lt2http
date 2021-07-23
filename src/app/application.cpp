@@ -129,5 +129,6 @@ void signalHandler( int signum ) {
 
     if (signum == SIGSEGV) {
         std::cerr << boost::stacktrace::stacktrace();
+        std::exit(signum);
     };
 }
