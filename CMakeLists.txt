@@ -22,15 +22,13 @@ set(minOpenSSLVersion 1.1.1)
 set(minBoostVersion 1.66)
 set(minOatppVersion 1.2.5)
 set(minOatppSwaggerVersion 1.2.5)
-set(minMimallocVersion 1.4)
+set(minMimallocVersion 2.0)
 
 include(CheckIPOSupported)
 include(CheckCXXSourceCompiles)
 
 include(FeatureSummary)
 include(FeatureOptionsSetup)
-
-check_ipo_supported(RESULT ipo_supported OUTPUT error)
 
 feature_option(USE_MIMALLOC "Enable use of MIMALLOC" OFF)
 feature_option(USE_STATIC "Enable STATIC binary creation" OFF)
