@@ -1,5 +1,6 @@
 #include "session.h"
 
+#include <boost/filesystem/operations.hpp>
 #include <chrono>
 #include <mutex>
 #include <stdexcept>
@@ -117,21 +118,20 @@ void Session::run() {
 }
 
 void Session::check_directories() {
-    if (m_config.torrents_path != ".") {
-        auto ec = mkpath(m_config.torrents_path);
-        if (ec) {
-            OATPP_LOGI("Session::configure", "Failed to create torrents directory at %s: %s\n"
-			, m_config.torrents_path.c_str(), ec.message().c_str());
-            throw lh::Exception(ec.message());
-        }
+    boost::system::error_code ec;
+    
+    ec = mkpath(m_config.torrents_path);
+    if (ec) {
+        OATPP_LOGI("Session::configure", "Failed to create torrents directory at %s: %s\n"
+        , m_config.torrents_path.c_str(), ec.message().c_str());
+        throw lh::Exception(ec.message());
     }
-    if (m_config.download_path != ".") {
-        auto ec = mkpath(m_config.download_path);
-        if (ec) {
-            OATPP_LOGI("Session::configure", "Failed to create downloads directory at %s: %s\n"
-			, m_config.download_path.c_str(), ec.message().c_str());
-            throw lh::Exception(ec.message());
-        }
+
+    ec = mkpath(m_config.download_path);
+    if (ec) {
+        OATPP_LOGI("Session::configure", "Failed to create downloads directory at %s: %s\n"
+        , m_config.download_path.c_str(), ec.message().c_str());
+        throw lh::Exception(ec.message());
     }
 }
 
