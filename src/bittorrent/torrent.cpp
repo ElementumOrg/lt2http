@@ -677,6 +677,7 @@ void Torrent::dump(std::stringstream &ss) {
     ss << "\n";
     ss << "    Trackers:\n";
 
+    std::map<std::string, std::string> trackers;
     for (auto &tracker : m_nativeHandle.trackers()) {
         int scrape_complete = -1;
         int scrape_incomplete = -1;
@@ -702,9 +703,14 @@ void Torrent::dump(std::stringstream &ss) {
             }
         }
 
-        ss << Fmt("        %-60s: %-3s seeds, %-3s peers, updating: %-5s, is_working: %-5s, message: %s\n", tracker.url.c_str(),
-                  peer_num_to_string(scrape_complete).c_str(), peer_num_to_string(scrape_incomplete).c_str(),
-                  is_updating ? "true" : "false", is_working ? "true" : "false", message.c_str());
+        trackers.insert(std::pair<std::string, std::string>(tracker.url, Fmt("        %-60s: %-3s seeds, %-3s peers, updating: %-5s, is_working: %-5s, message: %s\n", tracker.url.c_str(),
+                   peer_num_to_string(scrape_complete).c_str(), peer_num_to_string(scrape_incomplete).c_str(),
+                   is_updating ? "true" : "false", is_working ? "true" : "false", message.c_str())));
+    }
+
+    // List trackers information sorted by tracker url.
+    for (auto &i : trackers) {
+        ss << i.second;
     }
 
     if (m_trackerInfos.find("DHT") != m_trackerInfos.end()) {

@@ -41,11 +41,6 @@ std::mutex torrentsMutex;
 
 const std::string extraTrackersURLTemplate = "https://ngosang.github.io/trackerslist/trackers_%s.txt";
 const std::vector<std::string> defaultTrackers = {
-    "http://retracker.mgts.by:80/announce",
-    "http://tracker.city9x.com:2710/announce",
-    "http://tracker.electro-torrent.pl:80/announce",
-    "http://tracker.internetwarriors.net:1337/announce",
-    "http://bt.svao-ix.ru/announce",
     "http://bt.t-ru.org/ann",
     "http://bt2.t-ru.org/ann",
     "http://bt3.t-ru.org/ann",
@@ -58,12 +53,8 @@ const std::vector<std::string> defaultTrackers = {
     "http://tracker.pomf.se/announce",
 
     "udp://tracker.opentrackr.org:1337/announce",
-    "udp://tracker.coppersurfer.tk:6969/announce",
-    "udp://tracker.leechers-paradise.org:6969/announce",
     "udp://tracker.openbittorrent.com:80/announce",
-    "udp://public.popcorn-tracker.org:6969/announce",
     "udp://explodie.org:6969",
-    "udp://46.148.18.250:2710",
     "udp://opentor.org:2710",
     "udp://valakas.rollo.dnsabr.com:2710",
     "udp://retracker.lanta-net.ru:2710",
