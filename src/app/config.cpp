@@ -35,6 +35,7 @@ Config::Config(int &argc, char *argv[]) {
                             "path to lt2http.json file")
         ("write,w",         po::value<std::string>(&write_config_file)->default_value(write_config_file),
                             "write current configuration to specific file")
+        ("update,u",        "update config json file after initialization")
         ;
 
     // Custom variables to store settings, that will need a conversion later
@@ -190,26 +191,33 @@ Config::Config(int &argc, char *argv[]) {
         exit(0);
     }
 
+    if (vm.count("update")) {
+        update_file = true;
+    }
+
     // Read configuration from file
     if (vm.count("config") && !vm["config"].defaulted()) {
         std::ifstream ifs(config_file.c_str());
-        if (!ifs) {
+        if (!ifs && !update_file) {
             OATPP_LOGE("Config", "Cannot open config file: %s", config_file.c_str());
             throw std::invalid_argument("Cannot open configuration file:" + config_file);
+        } 
+        if (ifs) {
+            OATPP_LOGI("Config", "Reading configuration from file: %s", config_file.c_str());
+
+            std::string json_data((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+            JS::ParseContext context(json_data);
+
+            auto err = context.parseTo(*this);
+
+            if (err != JS::Error::NoError) {
+                std::string errorStr = context.makeErrorString();
+                OATPP_LOGE("Config", "Error converting json: %s", errorStr.c_str());
+                throw std::invalid_argument("Error converting json: " + errorStr);
+            }
         }
-
-        OATPP_LOGI("Config", "Reading configuration from file: %s", config_file.c_str());
-
-        std::string json_data((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
-        JS::ParseContext context(json_data);
-
-        auto err = context.parseTo(*this);
-
-        if (err != JS::Error::NoError) {
-            std::string errorStr = context.makeErrorString();
-            OATPP_LOGE("Config", "Error converting json: %s", errorStr.c_str());
-            throw std::invalid_argument("Error converting json: " + errorStr);
-        }
+    } else {
+        update_file = false;
     }
 
     // Convert string variables into enum types
@@ -250,6 +258,20 @@ Config::Config(int &argc, char *argv[]) {
         ofs << JS::serializeStruct(*this);
         ofs.close();
         std::exit(0);
+    }
+
+    // Write current configuration to config file, used for loading.
+    if (vm.count("update") && update_file) {
+        std::ofstream ofs(config_file.c_str());
+        if (!ofs) {
+            OATPP_LOGE("Config", "Cannot open output file: %s", config_file.c_str());
+            throw std::invalid_argument("Cannot open output file:" + config_file);
+        } 
+
+        OATPP_LOGI("Config", "Writing current configuration to file: %s", config_file.c_str());
+
+        ofs << JS::serializeStruct(*this);
+        ofs.close();
     }
 
     // Autoselect memory size
