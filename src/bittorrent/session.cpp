@@ -40,12 +40,21 @@ std::mutex torrentsMutex;
 
 const std::string extraTrackersURLTemplate = "https://ngosang.github.io/trackerslist/trackers_%s.txt";
 const std::vector<std::string> defaultTrackers = {
-    "http://bt4.t-ru.org/ann",
     "http://retracker.mgts.by:80/announce",
     "http://tracker.city9x.com:2710/announce",
     "http://tracker.electro-torrent.pl:80/announce",
     "http://tracker.internetwarriors.net:1337/announce",
     "http://bt.svao-ix.ru/announce",
+    "http://bt.t-ru.org/ann",
+    "http://bt2.t-ru.org/ann",
+    "http://bt3.t-ru.org/ann",
+    "http://bt4.t-ru.org/ann",
+    "http://92.42.108.54:2710/announce",
+    "http://tracker.grepler.com:6969/announce",
+    "http://bt1.archive.org:6969/announce",
+    "http://bt2.archive.org:6969/announce",
+    "http://sugoi.pomf.se/announce",
+    "http://tracker.pomf.se/announce",
 
     "udp://tracker.opentrackr.org:1337/announce",
     "udp://tracker.coppersurfer.tk:6969/announce",
@@ -55,6 +64,25 @@ const std::vector<std::string> defaultTrackers = {
     "udp://explodie.org:6969",
     "udp://46.148.18.250:2710",
     "udp://opentor.org:2710",
+    "udp://valakas.rollo.dnsabr.com:2710",
+    "udp://retracker.lanta-net.ru:2710",
+    "udp://9.rarbg.me:2740",
+    "udp://9.rarbg.to:2790",
+    "udp://tracker.uw0.xyz:6969",
+    "udp://open.stealth.si:80",
+    "udp://exodus.desync.com:6969",
+    "udp://tracker.theoks.net:6969",
+    "udp://tracker.moeking.me:6969",
+    "udp://tracker.torrent.eu.org:451",
+    "udp://tracker.ololosh.space:6969",
+    "udp://t1.leech.ie:1337",
+    "udp://inferno.demonoid.is:3391",
+    "udp://mts.tvbit.co:6969",
+    "udp://retracker.netbynet.ru:2710",
+    "udp://edu.uifr.ru:6969",
+    "udp://engplus.ru:6969",
+    "udp://torrent.by:2710",
+    "udp://tracker.cortexlabs.ai:5008"
 };
 std::vector<std::string> extraTrackers;
 
