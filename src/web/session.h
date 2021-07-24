@@ -49,6 +49,7 @@ class SessionController : public oatpp::web::server::api::ApiController {
         std::stringstream ss;
         ss << "<!DOCTYPE html><html lang=\"en-US\"><head>"
             << "<title>lt2http Status</title>"
+            << R"(<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>)"
             << R"(<meta http-equiv="refresh" content="30">)"
             <<  "</head><body>";
 
