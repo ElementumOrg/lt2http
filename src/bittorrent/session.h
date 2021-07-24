@@ -34,6 +34,7 @@ class Session {
 
     std::shared_ptr<Config> config();
     void run();
+    void check_directories();
     void configure();
     void reconfigure();
     void start_services();

@@ -88,9 +88,30 @@ void Session::run() {
     load_previous_torrents();
 }
 
+void Session::check_directories() {
+    if (m_config.torrents_path != ".") {
+        auto ec = mkpath(m_config.torrents_path);
+        if (ec) {
+            OATPP_LOGI("Session::configure", "Failed to create torrents directory at %s: %s\n"
+			, m_config.torrents_path.c_str(), ec.message().c_str());
+            throw lh::Exception(ec.message());
+        }
+    }
+    if (m_config.download_path != ".") {
+        auto ec = mkpath(m_config.download_path);
+        if (ec) {
+            OATPP_LOGI("Session::configure", "Failed to create downloads directory at %s: %s\n"
+			, m_config.download_path.c_str(), ec.message().c_str());
+            throw lh::Exception(ec.message());
+        }
+    }
+}
+
 void Session::configure() {
     auto user_agent = get_user_agent();
     OATPP_LOGI("Session::configure", "UserAgent: %s", user_agent.c_str())
+
+    check_directories();
 
     m_pack.set_str(lt::settings_pack::user_agent, user_agent);
 
@@ -547,8 +568,8 @@ void Session::load_previous_torrents() {
     torrentsMutex.unlock();
 
     OATPP_LOGI("Session::load_previous_torrents", "Loading previous torrents from: %s", m_config.torrents_path.c_str());
-    lt::error_code ec;
-    std::vector<std::string> entries = list_dir(
+    boost::system::error_code ec;
+    std::multimap<std::time_t, boost::filesystem::path> entries = list_dir(
         m_config.torrents_path, [](lt::string_view p) { return p.size() > 8 && p.substr(p.size() - 8) == ".torrent"; }, ec);
     if (ec) {
         OATPP_LOGE("Session::load_previous_torrents", "Failed to list directory '%s': %s", m_config.torrents_path.c_str(),
@@ -557,7 +578,7 @@ void Session::load_previous_torrents() {
     }
 
     for (auto &p : entries) {
-        std::string path = path_append(m_config.torrents_path, p);
+        std::string path = p.second.string();
         try {
             add_torrent(
                 path, 
