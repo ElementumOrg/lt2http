@@ -99,10 +99,11 @@ inline std::string path_append(std::string const &lhs, std::string const &rhs) {
 }
 
 inline std::string make_absolute_path(std::string const &p) {
+    boost::system::error_code ec;
     if (is_absolute_path(p))
         return p;
     
-    return boost::filesystem::absolute(boost::filesystem::path{p}).string();
+    return boost::filesystem::absolute(boost::filesystem::path{p}, ec).string();
 }
 
 inline std::string resume_file(std::string save_path, std::string info_hash) {
@@ -126,8 +127,10 @@ inline std::multimap<std::time_t, boost::filesystem::path> list_dir(std::string 
         return files;
 
     for (boost::filesystem::directory_entry& entry : boost::filesystem::directory_iterator(p, ec)) {
-        if (boost::filesystem::is_regular_file(entry) && filter_fun(entry.path().filename().string()))
-            files.insert(std::pair<std::time_t, boost::filesystem::path>(boost::filesystem::last_write_time(entry), entry.path()));
+        if (boost::filesystem::is_regular_file(entry, ec) && filter_fun(entry.path().filename().string()))
+            files.insert(std::pair<std::time_t, boost::filesystem::path>(boost::filesystem::last_write_time(entry, ec), entry.path()));
+        if (ec)
+            return files;
     }
 
     return files;
