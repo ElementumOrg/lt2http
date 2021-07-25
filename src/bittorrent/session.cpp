@@ -111,12 +111,18 @@ void Session::run() {
 void Session::check_directories() {
     boost::system::error_code ec;
     
+    if (m_config.torrents_path.empty())
+        throw lh::Exception("Cannot start without torrents_path setting");
+
     ec = mkpath(m_config.torrents_path);
     if (ec) {
         OATPP_LOGI("Session::configure", "Failed to create torrents directory at %s: %s\n"
         , m_config.torrents_path.c_str(), ec.message().c_str());
         throw lh::Exception(ec.message());
     }
+
+    if (m_config.download_path.empty())
+        throw lh::Exception("Cannot start without download_path setting");
 
     ec = mkpath(m_config.download_path);
     if (ec) {

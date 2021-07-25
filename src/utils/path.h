@@ -149,7 +149,7 @@ inline std::time_t modtime_file(std::string &path) {
 
 inline boost::system::error_code mkpath(std::string &path) {
     boost::system::error_code ec;
-    if (path != "." && !boost::filesystem::exists(path))
+    if (!path.empty() && path != "." && !boost::filesystem::exists(path))
         boost::filesystem::create_directories(path, ec);
     
     return ec;
