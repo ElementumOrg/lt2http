@@ -29,8 +29,9 @@ rm boost_${BOOST_VERSION_FILE}.tar.bz2
 echo
 echo "Compiling Boost, version: ${BOOST_VERSION}"
 cd boost_${BOOST_VERSION_FILE}
+echo "Patching Boost"
+patch -p1 < ${scripts_path}/boost-statx-disable.patch
 ./bootstrap.sh --prefix=${CROSS_ROOT} ${BOOST_BOOTSTRAP_OPTS}
-
 echo "using ${BOOST_CC} : ${BOOST_OS} : ${CROSS_TRIPLE}-${BOOST_CXX} ${BOOST_FLAGS} ;" > ${HOME}/user-config.jam
 export PATH="$CROSS_ROOT/bin:$PATH"
 run ./b2 --with-date_time --with-system --with-chrono --with-random --with-program_options --with-filesystem --prefix=${CROSS_ROOT} \

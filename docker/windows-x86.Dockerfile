@@ -28,6 +28,7 @@ RUN ./build-backtrace.sh
 
 # Install Boost.System
 COPY build-boost.sh /build/
+COPY boost-statx-disable.patch /build/
 ENV BOOST_CC gcc
 ENV BOOST_CXX g++
 ENV BOOST_OS mingw32

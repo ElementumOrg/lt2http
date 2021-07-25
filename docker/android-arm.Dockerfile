@@ -26,6 +26,7 @@ RUN ./build-backtrace.sh
 
 # Install Boost.System
 COPY build-boost.sh /build/
+COPY boost-statx-disable.patch /build/
 ENV BOOST_CC clang
 ENV BOOST_CXX clang++
 ENV BOOST_OS android
