@@ -8,6 +8,7 @@
 #include <oatpp/network/Server.hpp>
 
 #include <boost/stacktrace.hpp>
+#include <boost/exception/diagnostic_information.hpp>
 
 #ifdef USE_MIMALLOC
 #include <mimalloc.h>
@@ -24,6 +25,7 @@ int main(int argc, char *argv[]) {
         lh::app().run();
     } catch (const std::exception &e) {
         OATPP_LOGE("main", "Exception: %s", e.what())
+        OATPP_LOGE("main", "Exception information: %s", boost::diagnostic_information(e, true).c_str())
         std::cerr << boost::stacktrace::stacktrace();
     } catch (...) {
         OATPP_LOGE("main", "Exception: %s", typeid(std::current_exception()).name())
