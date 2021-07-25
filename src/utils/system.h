@@ -4,23 +4,24 @@
 
 #include <windows.h>
 
-inline unsigned long long get_total_system_memory()
+inline std::int64_t get_total_system_memory()
 {
     MEMORYSTATUSEX status;
     status.dwLength = sizeof(status);
     GlobalMemoryStatusEx(&status);
-    return status.ullTotalPhys;
+    return std::int64_t(status.ullTotalPhys);
 }
 
 #else
 
 #include <unistd.h>
+#include <iostream>
 
-inline unsigned long long get_total_system_memory()
+inline std::int64_t get_total_system_memory()
 {
     long pages = sysconf(_SC_PHYS_PAGES);
     long page_size = sysconf(_SC_PAGE_SIZE);
-    return pages * page_size;
+    return std::int64_t(pages) * std::int64_t(page_size);
 }
 
 #endif

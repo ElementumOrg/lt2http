@@ -282,9 +282,9 @@ Config::Config(int &argc, char *argv[]) {
             // We try to use 15 percent of physical memory size for MAX strategy and 8 percent for usual strategy.
             int pct = auto_memory_size_strategy == auto_memory_strategy_type_t::max ? 15 : 8;
 
-            auto total = get_total_system_memory();
+            std::int64_t total = get_total_system_memory();
             std::int64_t mem = total / 100 * pct;
-            if (mem > 0) {
+            if (mem > 0 && total > 0) {
                 memory_size = int(mem / 1024 / 1024);
             }
 

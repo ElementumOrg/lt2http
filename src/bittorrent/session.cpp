@@ -318,7 +318,7 @@ void Session::configure() {
         std::int64_t msize = memory_size();
 
         if (msize < need_size) {
-            OATPP_LOGI("Session::configure", "Raising memory size (from %d) to fit all the buffer (to %d)",
+            OATPP_LOGI("Session::configure", "Raising memory size (from %s) to fit all the buffer (to %s)",
                        humanize_bytes(msize).c_str(), humanize_bytes(need_size).c_str())
             msize = need_size;
             m_config.memory_size = msize / 1024 / 1024;
