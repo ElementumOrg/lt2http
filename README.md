@@ -35,10 +35,10 @@ Dependencies
 `lt2http` has these dependencies:
 - Boost (at least version 1.66.0)
 - OpenSSL (at least version 1.1.1)
-- Libtorrent (at least version 2.0.0)
+- Libtorrent (at least version 1.2.1)
 - Oatpp (at least version 1.2.5)
 - Oatpp-swagger (at least version 1.2.5)
-- MiMalloc (at least version 1.7.0)
+- MiMalloc (at least version 2.0.0)
 - Libbacktrace (latest master)
 
 Build dependencies
