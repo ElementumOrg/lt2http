@@ -7,11 +7,12 @@
 std::string changes = R""""(
 <b>Changes:</b>
 
-<b>0.0.9-0.0.10:</b>
+<b>0.0.9-0.0.11:</b>
     - Added --update/-u cli argument support to update configuration, defined with --config, with current configuration.
     - Added more default trackers.
     - Added creation of directories for torrents_path and downloads_path.
     - Added sorting to trackers list in /info.
+    - Added more information to log file.
 
 <b>0.0.7-0.0.8:</b>
     - Added additional trackers modification for added torrents.
