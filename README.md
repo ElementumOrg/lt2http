@@ -71,10 +71,17 @@ Build lt2http
 - If you use profile `RelWithDebInfo` - Cmake will enable sanitizers for the binary: `-fsanitize=leak -fsanitize=undefined -fsanitize=bounds -fsanitize=bounds-strict`
 - If you use profile `Debug` or `RelWithDebInfo` Cmake will add debug symbols in the binary, useful to find cause of a segmentation fault or some error.
 
-Build process:
+Build locally process:
 ```
 $ mkdir -p build && cd build
 $ cmake -DCMAKE_BUILD_TYPE=Release .. && make -j$(nproc)
+```
+
+Build using Docker:
+There is a simple way, pull docker image and compile lt12http there.
+```
+$ make pull PLATFORM=linux-x64 # Pull Docker image for platform linux-x64 from Docker Hub
+$ make linux-x64 # Run in linux-x64 Docker image
 ```
 
 Build process helper:

@@ -205,6 +205,14 @@ prepare-all:
 		$(MAKE) prepare PLATFORM=$(PLATFORM); \
 	done
 
+push:
+	docker push $(DOCKER_IMAGE):$(PLATFORM)
+
+push-all:
+	for i in $(PLATFORMS); do \
+		PLATFORM=$$i $(MAKE) push; \
+	done
+
 local-env:
 	mkdir -p $(LOCAL_CROSS_ROOT)
 	cd $(LOCAL_CROSS_ROOT)
