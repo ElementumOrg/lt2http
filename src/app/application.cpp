@@ -38,8 +38,6 @@ lh::Session& Application::session() {
 }
 
 void Application::run() {
-    OATPP_LOGI("Application::run", "Starting lt2http, version: %s, Libtorrent version: %s", lh::VERSION.c_str(), LIBTORRENT_VERSION);
-
     lh::web_interface = m_config.web_interface;
     lh::web_port = m_config.web_port;
 

@@ -22,7 +22,7 @@ class Application
 public:
     static void init(int argc, char *argv[])
     {
-        OATPP_LOGI("Application::init", "Initializing application");
+        OATPP_LOGI("Application::init", "Starting lt2http, version: %s, Libtorrent version: %s", lh::VERSION.c_str(), LIBTORRENT_VERSION)
 
         // Redefine signal handler for proper logging.
         std::signal(SIGINT, signalHandler);
