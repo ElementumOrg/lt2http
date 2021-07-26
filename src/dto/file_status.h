@@ -51,6 +51,8 @@ inline oatpp::Object<FileStatusDto> fileStatusDtoFromFile(const std::shared_ptr<
     dto->total_done = completed[file->index()];
     dto->progress = progress[file->index()];
     dto->priority = file->priority();
+    dto->buffering_total = file->buffer_size();
+    dto->buffering_progress = file->buffer_progress();
 
     return dto;
 }
