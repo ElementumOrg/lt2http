@@ -50,6 +50,14 @@ bool Reader::is_closing() const {
     return m_isClosing;
 };
 
+bool Reader::is_iterated() const {
+    return m_isIterated;
+};
+    
+void Reader::set_iterated(bool val) {
+    m_isIterated = val;
+};
+
 oatpp::v_io_size Reader::read(void *buffer, v_buff_size bufferSize, oatpp::async::Action &action) {
     std::lock_guard<std::mutex> g(m_lock);
 

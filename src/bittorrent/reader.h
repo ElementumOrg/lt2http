@@ -35,6 +35,7 @@ class Reader : public oatpp::data::stream::ReadCallback {
 
     bool m_isClosing = false;
     bool m_isPrioritized = false;
+    bool m_isIterated = false;
 
     std::chrono::seconds m_piece_timeout{60};
 
@@ -48,6 +49,9 @@ class Reader : public oatpp::data::stream::ReadCallback {
     int piece_end_limit() const;
 
     bool is_closing() const;
+
+    bool is_iterated() const;
+    void set_iterated(bool val);
 
     oatpp::v_io_size read(void *buffer, v_buff_size bufferSize, oatpp::async::Action &action) override;
 

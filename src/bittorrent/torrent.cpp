@@ -502,8 +502,10 @@ void Torrent::piece_priority(lt::piece_index_t index, lt::download_priority_t pr
 };
 
 void Torrent::set_piece_deadline(lt::piece_index_t index, int deadline) {
-    if (m_deadline_pieces.test(index))
+    if (m_deadline_pieces.test(index)) {
+        OATPP_LOGI("Torrent::set_piece_deadline", "Skipping deadline for piece '%d'", index);
         return;
+    }
 
     OATPP_LOGI("Torrent::set_piece_deadline", "Setting deadline '%d' for piece '%d'", deadline, index);
     m_deadline_pieces.set(index);
@@ -846,15 +848,27 @@ void Torrent::prioritize() {
     int readers_finished = 0;
     std::vector<int> reader_pieces;
 
+    for (const auto &p : m_readers) {
+        p.second->set_iterated(false);
+    }
+
     while (readers_finished < m_readers.size() && pieces_limit > 0) {
         iter_count++;
         for (const auto &p : m_readers) {
-            if (p.second->is_closing() || p.second->piece_start() + iter_count > p.second->piece_end_limit()) {
+            int index = p.second->piece_start() + iter_count;
+            if (p.second->is_iterated()) {
+                continue;
+            }
+            if (p.second->is_closing() || index > p.second->piece_end_limit()) {
+                p.second->set_iterated(true);
                 readers_finished++;
                 continue;
             }
             
-            reader_pieces.push_back(p.second->piece_start() + iter_count);
+            if (std::find(reader_pieces.begin(), reader_pieces.end(), index) != reader_pieces.end())
+                continue;
+
+            reader_pieces.push_back(index);
             pieces_limit--;
             if (pieces_limit <= 0)
                 break;
