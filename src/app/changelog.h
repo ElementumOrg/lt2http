@@ -7,6 +7,10 @@
 std::string changes = R""""(
 <b>Changes:</b>
 
+<b>0.0.13:</b>
+    - Added buffering information to endpoint /torrents/{infoHash}/files/{index}/status.
+    - More changes to priority setters.
+
 <b>0.0.9-0.0.12:</b>
     - Added --update/-u cli argument support to update configuration, defined with --config, with current configuration.
     - Added more default trackers.
