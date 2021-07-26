@@ -728,17 +728,31 @@ void Torrent::dump(std::stringstream &ss) {
         reader_positions.push_back(reader.second->piece_start());
     }
 
+    int total_prioritized = 0;
+    int total_have = 0;
     for (int i = 0; i < pieces_count(); i++) {
         if (std::find(reader_positions.begin(), reader_positions.end(), i) != reader_positions.end()) {
-            if (m_nativeHandle.have_piece(lt::piece_index_t{i}))
-                ss << "*";
-            else
-                ss << "?";
+            total_prioritized++;
+            // Piece is in scope of Readers
+            if (m_nativeHandle.have_piece(lt::piece_index_t{i})) {
+                total_have++;
+                ss << "<b>*</b>";
+            } else {
+                ss << "<b>?</b>";
+            }
         } else if (m_nativeHandle.have_piece(lt::piece_index_t{i})) {
+            // We already have this piece
+            total_have++;
+            if (m_nativeHandle.piece_priority(lt::piece_index_t{i}) > 0)
+                total_prioritized++;
+
             ss << "+";
         } else if (m_nativeHandle.piece_priority(lt::piece_index_t{i}) == 0) {
+            // Piece is not prioritized
             ss << "-";
         } else {
+            // Piece is in the queue
+            total_prioritized++;
             ss << int(m_nativeHandle.piece_priority(lt::piece_index_t{i}));
         }
 
@@ -746,6 +760,8 @@ void Torrent::dump(std::stringstream &ss) {
             ss << "\n        ";
         }
     }
+    ss << Fmt("\n        Readers: <b>%d</b>, Stored: <b>%d</b>, Prioritized: <b>%d</b>",
+                m_readers.size(), total_have, total_prioritized);
     ss << "\n\n\n";
     ss << "    " << std::string(150, '*') << "\n";
     ss << "\n\n";
