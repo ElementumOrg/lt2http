@@ -12,7 +12,7 @@ LIBTORRENT_VERSION=ac326b0576cc08c9c7ad4c2d661029ee747b0ab7 # RC_1_2
 
 # https://github.com/oatpp/oatpp
 #OATPP_VERSION=1.2.5
-OATPP_VERSION=90011c2c14cc028a6ad37fcb4ecea134517e6c46
+OATPP_VERSION=bf0bd0aded06dd98330061a80042ef3c3a12df54
 
 # https://github.com/oatpp/oatpp-swagger
 OATPP_SWAGGER_VERSION=1.2.5
