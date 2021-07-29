@@ -17,7 +17,7 @@ public:
 
   p_char8 getKnownData() override;
 
-  v_buff_size getKnownSize() override;
+  v_int64 getKnownSize() override;
   
 };
   

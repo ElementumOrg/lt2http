@@ -22,7 +22,7 @@ p_char8 EmptyBody::getKnownData() {
   return nullptr;
 }
 
-v_buff_size EmptyBody::getKnownSize() {
+v_int64 EmptyBody::getKnownSize() {
   return m_size;
 }
 

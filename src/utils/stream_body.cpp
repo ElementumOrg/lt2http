@@ -21,7 +21,7 @@ p_char8 StreamBody::getKnownData() {
 }
 
 
-v_buff_size StreamBody::getKnownSize() {
+v_int64 StreamBody::getKnownSize() {
   return m_size;
 }
 
