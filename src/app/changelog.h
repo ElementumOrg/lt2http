@@ -7,10 +7,11 @@
 std::string changes = R""""(
 <b>Changes:</b>
 
-<b>0.0.13-0.0.14:</b>
+<b>0.0.13-0.0.15:</b>
     - Added buffering information to endpoint /torrents/{infoHash}/files/{index}/status.
     - More changes to priority setters.
-    - Fixed issues with Seek actions on 32-bit platforms. 
+    - Fixed issues with Seek actions on 32-bit platforms.
+    - Fixed windows-x86 build to become static and do not require dll's.
 
 <b>0.0.9-0.0.12:</b>
     - Added --update/-u cli argument support to update configuration, defined with --config, with current configuration.
