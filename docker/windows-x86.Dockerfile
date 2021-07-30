@@ -1,6 +1,7 @@
 FROM elementumorg/cross-compiler:windows-x86
 
 ENV CMAKE_FLAGS -DCMAKE_TOOLCHAIN_FILE=/build/toolchains/mingw.cmake
+ENV USE_STATIC ON
 
 RUN mkdir -p /build
 WORKDIR /build
