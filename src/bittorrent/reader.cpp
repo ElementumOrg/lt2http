@@ -74,8 +74,6 @@ oatpp::v_io_size Reader::read(void *buffer, v_buff_size bufferSize, oatpp::async
         m_torrent->prioritize();
     }
 
-    m_torrent->prioritize_pieces(m_piece_start, std::min(m_piece_start + 2, int(m_file->piece_end())));
-
     lt::storage_error ec;
     int ret = 0;
     int n = 0;
@@ -133,6 +131,8 @@ std::int64_t Reader::piece_offset(int piece) const { return std::int64_t(piece) 
 
 void Reader::wait_for_piece(int piece) {
     OATPP_LOGI("Reader::wait_for_piece", "Waiting for piece: %d", piece);
+
+    m_torrent->prioritize_pieces(m_piece_start, std::min(m_piece_start + 2, int(m_file->piece_end())));
 
     auto now = std::chrono::system_clock::now();
     while (!m_torrent->have_piece(piece)) {
