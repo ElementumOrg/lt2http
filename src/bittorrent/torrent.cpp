@@ -524,7 +524,7 @@ void Torrent::prioritize_pieces(lt::piece_index_t start, lt::piece_index_t end) 
         if (i == int(start)) {
             set_piece_priority(i, 0, lt::download_priority_t{7});
         } else {
-            set_piece_priority(i, (i - int(start)) * 10, lt::download_priority_t{6});
+            set_piece_priority(i, (i - int(start)) * 50, lt::download_priority_t{6});
         }
     }
 };
