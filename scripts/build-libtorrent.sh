@@ -16,8 +16,8 @@ echo
 echo "Downloading Libtorrent, version: ${LIBTORRENT_VERSION}"
 rm -rf libtorrent-`echo ${LIBTORRENT_VERSION} | sed 's/\\./_/g'`/
 if [ ! -f "${LIBTORRENT_VERSION}.tar.gz" ]; then
-  #wget -q https://github.com/arvidn/libtorrent/archive/`echo ${LIBTORRENT_VERSION} | sed 's/\\./_/g'`.tar.gz
-  wget -q https://github.com/ElementumOrg/libtorrent/archive/`echo ${LIBTORRENT_VERSION} | sed 's/\\./_/g'`.tar.gz
+  wget -q https://github.com/arvidn/libtorrent/archive/`echo ${LIBTORRENT_VERSION} | sed 's/\\./_/g'`.tar.gz
+  # wget -q https://github.com/ElementumOrg/libtorrent/archive/`echo ${LIBTORRENT_VERSION} | sed 's/\\./_/g'`.tar.gz
 fi
 rm -rf libtorrent
 tar -xzf ${LIBTORRENT_VERSION}.tar.gz
