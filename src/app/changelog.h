@@ -7,6 +7,10 @@
 std::string changes = R""""(
 <b>Changes:</b>
 
+<b>0.0.16:</b>
+    - Try to switch to original libtorrent repository.
+    - Changes to priority settings for torrent pieces.
+
 <b>0.0.13-0.0.15:</b>
     - Added buffering information to endpoint /torrents/{infoHash}/files/{index}/status.
     - More changes to priority setters.
