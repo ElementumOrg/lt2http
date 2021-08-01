@@ -2,7 +2,7 @@
 
 namespace oatpp { namespace web { namespace protocol { namespace http { namespace outgoing {
 
-EmptyBody::EmptyBody(const v_buff_size& sz)
+EmptyBody::EmptyBody(const v_int64& sz)
   : m_size(sz)
 {}
 

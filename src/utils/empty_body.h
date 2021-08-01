@@ -7,9 +7,9 @@ namespace oatpp { namespace web { namespace protocol { namespace http { namespac
 
 class EmptyBody : public Body {
 private:
-  v_buff_size m_size;
+  v_int64 m_size;
 public:
-  EmptyBody(const v_buff_size& sz);
+  EmptyBody(const v_int64& sz);
 
   v_io_size read(void *buffer, v_buff_size count, async::Action& action) override;
 
