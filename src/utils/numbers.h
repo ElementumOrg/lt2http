@@ -29,7 +29,7 @@ inline double roundOff(double n) {
     return d;
 }
 
-inline std::string humanize_bytes(size_t size) {
+inline std::string humanize_bytes(std::int64_t size) {
     if (size < 0)
         return convertToString(size);
 
