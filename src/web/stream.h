@@ -91,7 +91,7 @@ class StreamController : public oatpp::web::server::api::ApiController {
             }
 
             response->putHeader("Accept-Ranges", "bytes");
-            response->putHeader(Header::CONNECTION, Header::Value::CONNECTION_KEEP_ALIVE);
+            response->putHeader(Header::CONNECTION, Header::Value::CONNECTION_CLOSE);
 
             auto mimeType = guess_mime_type(file->name());
             if (!mimeType.empty())
