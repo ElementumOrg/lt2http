@@ -55,7 +55,7 @@ class AppComponent {
      */
     OATPP_CREATE_COMPONENT(std::shared_ptr<oatpp::network::ServerConnectionProvider>, serverConnectionProvider)([] {
         return oatpp::network::tcp::server::ConnectionProvider::createShared(
-            {web_interface.c_str(), static_cast<v_uint16>(web_port), oatpp::network::Address::IP_4});
+            {web_interface.c_str(), static_cast<v_uint16>(web_port), oatpp::network::Address::IP_4}, true);
     }());
 
     /**

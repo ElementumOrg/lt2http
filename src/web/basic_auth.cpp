@@ -8,7 +8,9 @@ AuthInterceptor::AuthInterceptor() = default;
 
 std::shared_ptr<AuthInterceptor::OutgoingResponse> AuthInterceptor::intercept(const std::shared_ptr<IncomingRequest>& request) {
     auto config = lh::config();
-    if (!config.is_auth_needed())
+    auto remoteAddr = request->getConnection()->getInputStreamContext().getProperties().get(oatpp::network::tcp::server::ConnectionProvider::ExtendedConnection::PROPERTY_PEER_ADDRESS);
+
+    if (!config.is_auth_needed() || remoteAddr == "127.0.0.1")
         return nullptr;
 
     auto authHeader = request->getHeader(oatpp::web::protocol::http::Header::AUTHORIZATION);
