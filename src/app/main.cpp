@@ -15,7 +15,7 @@
 #include <mimalloc-override.h>
 #endif
 
-int main(int argc, char *argv[]) {
+auto main(int argc, char *argv[]) -> int {
     auto const logger = std::make_shared<lh::CustomLogger>();
     oatpp::base::Environment::init(logger);
 
@@ -35,9 +35,9 @@ int main(int argc, char *argv[]) {
     try {
         lh::app().close();
     } catch (const std::exception &e) {
-        OATPP_LOGE("main", "Failed closing application with Exception: %s", e.what());
+        OATPP_LOGE("main", "Failed closing application with Exception: %s", e.what())
     } catch (...) {
-        OATPP_LOGE("main", "Unknown Exception: %s", typeid(std::current_exception()).name());
+        OATPP_LOGE("main", "Unknown Exception: %s", typeid(std::current_exception()).name())
     }
 
     oatpp::base::Environment::destroy();
