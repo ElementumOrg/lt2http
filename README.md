@@ -100,3 +100,9 @@ Prepare new target OS:
 - Add it into Makefile's list of platforms.
 - Run Docker build with `PLATFORM=linux-x64 make env`, replace `linux-x64` with name of your Dockerfile.
 
+Release
+-------
+
+Release of a binary part of lt2http means compiling binaries for all platforms and putting them into <https://github.com/ElementumOrg/lt2http-binaries> repository (if we run on the git tag).
+
+Release is done with `release.sh` script.
