@@ -53,11 +53,13 @@ Versions are pinned in `scripts/versions.env`:
 - Oatpp and Oatpp-swagger 1.3
 - Libbacktrace (optional, for stack traces)
 
-`scripts/install_dependencies.sh` builds all of them as static libraries. It is used by the Docker images, and for a native build:
+`scripts/install_dependencies.sh` builds all of them as static libraries inside the Docker images. For a native build, copy them from an image:
 ```
-$ make local-env   # installs dependencies into ./local-env
+$ make local-env   # copies dependencies from the elementumorg/lt2http:linux-x64 image into ./local-env
 $ make local       # builds build/cmake/local/lt2http with the host compiler
 ```
+`LOCAL_PLATFORM=<platform>` picks another image; the host compiler has to match its toolchain (for example MinGW gcc for `windows-x64`).
+On hosts without a matching image, build the dependencies natively with `PREFIX=$PWD/local-env scripts/install_dependencies.sh`.
 
 Build lt2http
 ----------

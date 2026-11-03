@@ -6,6 +6,7 @@ DOCKER_IMAGE = elementumorg/lt2http
 BUILD_DIR = build
 BUILD_TYPE ?= Release
 LOCAL_PREFIX = $(CURDIR)/local-env
+LOCAL_PLATFORM ?= linux-x64
 
 # Same platforms as Elementum. <platform> builds the lt2http binary, <platform>-shared the lt2http library,
 # both end up in build/<platform>/ (the layout of lt2http-binaries and of the add-on's resources/bin).
@@ -33,7 +34,7 @@ help:
 	@echo "  all                  Build binaries and libraries for all platforms (JOBS=$(JOBS) in parallel)"
 	@echo "  <platform>           Build the binary, e.g. 'make linux-x64'"
 	@echo "  <platform>-shared    Build the shared library, e.g. 'make windows-x64-shared'"
-	@echo "  local-env, local     Build dependencies into ./local-env, then lt2http with the host compiler"
+	@echo "  local-env, local     Copy dependencies from the LOCAL_PLATFORM image into ./local-env, then build lt2http with the host compiler"
 	@echo
 	@echo "Images:"
 	@echo "  env PLATFORM=<p>     Build the dependencies image for a platform (envs: all of them)"
@@ -42,7 +43,7 @@ help:
 	@echo "Release:"
 	@echo "  binaries             Push build/<platform>/ to lt2http-binaries (needs GH_TOKEN)"
 	@echo
-	@echo "Variables: BUILD_TYPE=$(BUILD_TYPE), CMAKE_FLAGS, JOBS (parallel platforms), BUILD_JOBS (compile jobs per platform)"
+	@echo "Variables: BUILD_TYPE=$(BUILD_TYPE), CMAKE_FLAGS, LOCAL_PLATFORM=$(LOCAL_PLATFORM), JOBS (parallel platforms), BUILD_JOBS (compile jobs per platform)"
 	@echo
 	@echo "Platforms:"
 	@printf '  %s\n' $(PLATFORMS)
@@ -87,9 +88,14 @@ push:
 push-all:
 	for i in $(PLATFORMS); do $(DOCKER) push $(DOCKER_IMAGE):$$i; done
 
-# Native build for development, with dependencies built for the host into ./local-env
+# Native build for development, with dependencies copied from the $(DOCKER_IMAGE):$(LOCAL_PLATFORM) image into ./local-env,
+# so they match the release build. Paths baked into .pc/.cmake/.la files are rewritten to point to ./local-env.
 local-env:
-	PREFIX=$(LOCAL_PREFIX) scripts/install_dependencies.sh backtrace boost openssl oatpp oatpp-swagger libtorrent
+	rm -rf "$(LOCAL_PREFIX)"
+	mkdir -p "$(LOCAL_PREFIX)"
+	$(DOCKER) run --rm -u "$$(id -u):$$(id -g)" -v "$(LOCAL_PREFIX):/local-env" $(DOCKER_IMAGE):$(LOCAL_PLATFORM) bash -c '\
+		cp -a "$$CROSS_ROOT"/. /local-env/ && \
+		grep -rlIF "$$CROSS_ROOT" /local-env | xargs -r sed -i "s|$$CROSS_ROOT|$(LOCAL_PREFIX)|g"'
 
 local:
 	cmake -B $(BUILD_DIR)/cmake/local -DCMAKE_BUILD_TYPE=$(BUILD_TYPE) -DCMAKE_PREFIX_PATH=$(LOCAL_PREFIX) \
