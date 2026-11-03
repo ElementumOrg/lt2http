@@ -34,7 +34,7 @@ class FileStatusDto : public oatpp::DTO {
     DTO_FIELD_INFO(buffering_total) {
         info->description = "Buffer size (bytes)";
     }
-    DTO_FIELD(Int8, buffering_total);
+    DTO_FIELD(Int64, buffering_total);
 
     DTO_FIELD_INFO(buffering_progress) {
         info->description = "Percent of a buffering progress (0 to 100)";

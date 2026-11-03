@@ -72,7 +72,7 @@ class SessionController : public oatpp::web::server::api::ApiController {
     }
     ENDPOINT("GET", "/status", status) {
         try {
-            auto session = lh::session();
+            auto &session = lh::session();
             return createDtoResponse(Status::CODE_200, sessionStatusDtoFromSession(session));
         } catch (std::exception &e) {
             OATPP_LOGE("SessionController::status", "Error getting status: %s", e.what())

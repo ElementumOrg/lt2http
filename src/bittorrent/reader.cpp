@@ -10,14 +10,15 @@ namespace lh {
 
 Reader::Reader(std::shared_ptr<Torrent> torrent, std::shared_ptr<File> file, oatpp::web::protocol::http::Range range)
     : m_torrent(std::move(torrent)), m_file(std::move(file)), m_range(std::move(range)) {
-    m_id = std::stoi(get_random_numeric(7));
+    static std::atomic<std::int64_t> last_id{0};
+    m_id = ++last_id;
     OATPP_LOGI("Reader", "Creating reader for file: %s (%s)", m_file->path().c_str(), std::to_string(m_id).c_str());
 
     m_offset = m_file->offset();
     m_position = m_range.start;
     m_piece_size = m_torrent->piece_length();
     m_piece_start = piece_from_offset(m_range.start);
-    m_piece_end = m_range.end > 0 ? piece_from_offset(m_range.end) : piece_from_offset(m_size - 1);
+    m_piece_end = piece_from_offset(m_range.end);
 }
 
 Reader::~Reader() {
@@ -25,8 +26,6 @@ Reader::~Reader() {
 
     m_isClosing = true;
 
-    // Unregister reader from parent objects
-    m_file->unregister_reader(m_id);
     m_torrent->unregister_reader(m_id);
 }
 
@@ -50,21 +49,15 @@ bool Reader::is_closing() const {
     return m_isClosing;
 };
 
-bool Reader::is_iterated() const {
-    return m_isIterated;
-};
-    
-void Reader::set_iterated(bool val) {
-    m_isIterated = val;
-};
-
 oatpp::v_io_size Reader::read(void *buffer, v_buff_size bufferSize, oatpp::async::Action &action) {
     std::lock_guard<std::mutex> g(m_lock);
 
     (void)action;
 
-    if (m_position >= m_file->size())
+    // The range end is inclusive, never read past it.
+    if (m_position > m_range.end)
         return 0;
+    bufferSize = std::min<std::int64_t>(bufferSize, m_range.end + 1 - m_position);
 
     m_piece_start = piece_from_offset(m_position);
     m_piece_end = piece_from_offset(m_position + bufferSize - 1);
@@ -76,11 +69,9 @@ oatpp::v_io_size Reader::read(void *buffer, v_buff_size bufferSize, oatpp::async
 
     lt::storage_error ec;
     int ret = 0;
-    int n = 0;
-    int left = bufferSize;
-    lt::iovec_t b = {(char *)buffer, left};
+    lt::iovec_t left(static_cast<char *>(buffer), bufferSize);
 
-    for (int p = m_piece_start; p <= m_piece_end; ++p) {
+    for (int p = m_piece_start; p <= m_piece_end && !left.empty(); ++p) {
         if (!m_torrent->have_piece(p)) {
             wait_for_piece(p);
             if (m_isClosing || m_torrent->is_closing() || !m_torrent->have_piece(p))
@@ -88,25 +79,31 @@ oatpp::v_io_size Reader::read(void *buffer, v_buff_size bufferSize, oatpp::async
         }
         m_torrent->clear_piece_deadline(p);
 
-        if (ret > 0)
-            b = b.subspan(bufferSize-left);
+        // Read only from this piece, the next one is checked with have_piece() first.
+        auto const piece_offset = piece_offset_from_offset(m_position);
+        auto const piece_left = m_torrent->piece_length_at(p) - piece_offset;
+        if (piece_left <= 0)
+            break;
+        lt::iovec_t chunk = left.first(std::min<std::int64_t>(left.size(), piece_left));
 
-        n = m_torrent->storage()->readv(b, p, piece_offset_from_offset(m_position), lt::open_mode::read_only, ec);
+        int n = m_torrent->storage()->readv(chunk, p, int(piece_offset), lt::open_mode::read_only, ec);
         if (ec) {
             OATPP_LOGI("Reader::read", "Error from readv: %s", ec.ec.message().c_str());
-            return ret+n;
+            return ret + std::max(n, 0);
         }
+        if (n <= 0)
+            break;
 
-        left -= n;
         m_position += n;
         ret += n;
-    } 
+        left = left.subspan(n);
+    }
 
     if (ret <= 0) {
         OATPP_LOGI("Reader::read", "Empty. Position=%s, n=%d, bs=%d", std::to_string(m_position).c_str(), ret, bufferSize);
     } else if (ret < bufferSize) {
         OATPP_LOGI("Reader::read", "Not enough. Offset=%s, Position=%s, Start=%d, End=%d, FStart=%d, FEnd=%d, n=%d, bs=%d", 
-            std::to_string(m_offset).c_str(), std::to_string(m_position).c_str(), m_piece_start, m_piece_end, m_file->piece_start(), m_file->piece_end(), ret, bufferSize);
+            std::to_string(m_offset).c_str(), std::to_string(m_position).c_str(), m_piece_start.load(), m_piece_end, int(m_file->piece_start()), int(m_file->piece_end()), ret, bufferSize);
     }
 
     return ret;
@@ -132,7 +129,8 @@ std::int64_t Reader::piece_offset(int piece) const { return std::int64_t(piece) 
 void Reader::wait_for_piece(int piece) {
     OATPP_LOGI("Reader::wait_for_piece", "Waiting for piece: %d", piece);
 
-    m_torrent->prioritize_pieces(m_piece_start, std::min(m_piece_start + 2, int(m_file->piece_end())));
+    int const start = m_piece_start;
+    m_torrent->prioritize_pieces(start, std::min(start + 2, int(m_file->piece_end())));
 
     auto now = std::chrono::system_clock::now();
     while (!m_torrent->have_piece(piece)) {

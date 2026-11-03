@@ -7,7 +7,7 @@ namespace lh {
 AuthInterceptor::AuthInterceptor() = default;
 
 std::shared_ptr<AuthInterceptor::OutgoingResponse> AuthInterceptor::intercept(const std::shared_ptr<IncomingRequest>& request) {
-    auto config = lh::config();
+    auto const &config = lh::config();
     auto remoteAddr = request->getConnection()->getInputStreamContext().getProperties().get(oatpp::network::tcp::server::ConnectionProvider::ExtendedConnection::PROPERTY_PEER_ADDRESS);
 
     if (!config.is_auth_needed() || remoteAddr == "127.0.0.1")

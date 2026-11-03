@@ -25,7 +25,6 @@
 
 #include <bittorrent/reader.h>
 
-#include <utils/async.h>
 #include <utils/exceptions.h>
 #include <utils/http_client.h>
 #include <utils/numbers.h>
@@ -35,9 +34,6 @@
 using clk = std::chrono::steady_clock;
 
 namespace lh {
-
-// Lock for operations with m_torrents
-std::mutex torrentsMutex;
 
 const std::string extraTrackersURLTemplate = "https://ngosang.github.io/trackerslist/trackers_%s.txt";
 const std::vector<std::string> defaultTrackers = {
@@ -91,21 +87,38 @@ Session::Session(lh::Config &config) : m_config(config) {
     // Start lt:: services
     start_services();
 
-    // Start Alerts watcher in a separate thread
-    call_async([this] { this->consume_alerts(); });
-    call_async([this] { this->prioritize(); });
+    start_thread("Session::consume_alerts", [this] { consume_alerts(); });
+    start_thread("Session::prioritize", [this] { prioritize(); });
 }
 
-Session::~Session() = default;
+Session::~Session() {
+    m_isClosing = true;
+    m_cv.notify_all();
+    for (auto &thread : m_threads)
+        thread.join();
+}
 
-std::shared_ptr<Config> Session::config() { return std::shared_ptr<Config>(&m_config); }
+void Session::start_thread(const char *name, std::function<void()> fn) {
+    // An exception escaping a std::thread terminates the process, so log it and stop only this thread.
+    m_threads.emplace_back([name, fn] {
+        try {
+            fn();
+        } catch (const std::exception &e) {
+            OATPP_LOGE(name, "Thread stopped with exception: %s", e.what())
+        }
+    });
+}
+
+bool Session::wait_for_abort(std::chrono::milliseconds timeout) {
+    std::unique_lock<std::mutex> lock(m_cvMutex);
+    return m_cv.wait_for(lock, timeout, [this] { return is_closing(); });
+}
 
 void Session::run() {
-    // Load additional trackers if needed.
-    load_trackers();
-
-    // Load previous torrents.
-    load_previous_torrents();
+    start_thread("Session::run", [this] {
+        load_trackers();
+        load_previous_torrents();
+    });
 }
 
 void Session::check_directories() {
@@ -486,7 +499,7 @@ void Session::consume_alerts() {
         m_nativeSession->pop_alerts(&alerts);
 
         for (const lt::alert *a : alerts) {
-            if (lh::is_closing) {
+            if (is_closing()) {
                 OATPP_LOGI("Session::consume_alerts", "Stop alert processing due to closing application");
                 return;
             }
@@ -518,9 +531,7 @@ void Session::consume_alerts() {
                 OATPP_LOGD("Session::consume_alerts", "Alert: %s, Message: %s", a->what(), a->message().c_str());
             }
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
-
-        if (lh::is_closing) {
+        if (wait_for_abort(std::chrono::milliseconds(500))) {
             OATPP_LOGI("Session::consume_alerts", "Stop alert processing due to closing application");
             return;
         }
@@ -541,7 +552,7 @@ void Session::prioritize() {
     OATPP_LOGI("Session::prioritize", "Starting prioritizer thread");
 
     for (;;) {
-        for (const auto &t : m_torrents) {
+        for (const auto &t : torrents()) {
             if (t->is_buffering()) {
                 // Calculate buffer progress
                 t->update_buffer_progress();
@@ -555,9 +566,7 @@ void Session::prioritize() {
             t->prioritize();
         }
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
-
-        if (lh::is_closing) {
+        if (wait_for_abort(std::chrono::milliseconds(500))) {
             OATPP_LOGI("Session::prioritize", "Stop prioritizer due to closing application");
             return;
         }
@@ -578,19 +587,16 @@ void Session::close() {
 
     // Stop lt:: services
     stop_services();
-
-    std::lock_guard<std::mutex> guard(torrentsMutex);
-    for (const auto &t : m_torrents)
-        t->files().clear();
 }
 
 void Session::load_previous_torrents() {
     if (!m_config.autoload_torrents || m_config.torrents_path.empty())
         return;
 
-    torrentsMutex.lock();
-    m_torrents.clear();
-    torrentsMutex.unlock();
+    {
+        std::lock_guard<std::mutex> guard(m_torrentsMutex);
+        m_torrents.clear();
+    }
 
     OATPP_LOGI("Session::load_previous_torrents", "Loading previous torrents from: %s", m_config.torrents_path.c_str());
     boost::system::error_code ec;
@@ -799,9 +805,10 @@ std::shared_ptr<Torrent> Session::add_torrent(std::string &uri, bool is_paused, 
 
     auto torrent = std::make_shared<Torrent>(m_nativeSession, th, st, added_time);
 
-    torrentsMutex.lock();
-    m_torrents.emplace_back(torrent);
-    torrentsMutex.unlock();
+    {
+        std::lock_guard<std::mutex> guard(m_torrentsMutex);
+        m_torrents.emplace_back(torrent);
+    }
 
     if (torrent->has_metadata())
         torrent->on_metadata_received();
@@ -811,38 +818,37 @@ std::shared_ptr<Torrent> Session::add_torrent(std::string &uri, bool is_paused, 
     return torrent;
 }
 
-std::vector<std::shared_ptr<Torrent>> Session::torrents() { return m_torrents; }
+std::vector<std::shared_ptr<Torrent>> Session::torrents() {
+    std::lock_guard<std::mutex> guard(m_torrentsMutex);
+    return m_torrents;
+}
 
-std::shared_ptr<Torrent> Session::get_torrent(std::string &hash) {
-    std::lock_guard<std::mutex> guard(torrentsMutex);
+std::shared_ptr<Torrent> Session::find_torrent(const std::string &hash) const {
+    std::lock_guard<std::mutex> guard(m_torrentsMutex);
 
     auto match =
-        std::find_if(m_torrents.begin(), m_torrents.end(), [&hash](const std::shared_ptr<Torrent>& t) { return t->hash() == hash; });
-    if (match == m_torrents.end())
+        std::find_if(m_torrents.begin(), m_torrents.end(), [&hash](const std::shared_ptr<Torrent> &t) { return t->hash() == hash; });
+    return match == m_torrents.end() ? nullptr : *match;
+}
+
+std::shared_ptr<Torrent> Session::get_torrent(const std::string &hash) const {
+    auto torrent = find_torrent(hash);
+    if (!torrent)
         throw lh::TorrentException(Fmt("Torrent with hash '%s' not found", hash.c_str()));
 
-    return *match;
+    return torrent;
 }
 
-bool Session::has_torrent(std::string &hash) {
-    std::lock_guard<std::mutex> guard(torrentsMutex);
+bool Session::has_torrent(const std::string &hash) const { return find_torrent(hash) != nullptr; }
 
-    auto match = std::find_if(m_torrents.begin(), m_torrents.end(),
-                              [&hash](const std::shared_ptr<Torrent> &t) { return t->hash() == hash; });
-    return match != m_torrents.end();
-}
-
-bool Session::remove_torrent(std::string &hash, bool is_delete_files, bool is_delete_data) {
+bool Session::remove_torrent(const std::string &hash, bool is_delete_files, bool is_delete_data) {
     auto torrent = get_torrent(hash);
     torrent->remove(is_delete_files, is_delete_data);
 
     OATPP_LOGI("Session::remove_torrent", "Removed torrent with hash: %s", torrent->hash().c_str());
 
-    std::lock_guard<std::mutex> guard(torrentsMutex);
-
-    auto match = std::find_if(m_torrents.begin(), m_torrents.end(),
-                              [&hash](const std::shared_ptr<Torrent> &t) { return t->hash() == hash; });
-    m_torrents.erase(match);
+    std::lock_guard<std::mutex> guard(m_torrentsMutex);
+    m_torrents.erase(std::remove(m_torrents.begin(), m_torrents.end(), torrent), m_torrents.end());
 
     return true;
 }
@@ -890,30 +896,25 @@ int Session::get_max_connections() {
 
 bool Session::is_memory_storage() const { return m_config.download_storage == storage_type_t::memory; }
 
-bool Session::is_closing() const { return m_isClosing; }
+bool Session::is_closing() const { return m_isClosing || lh::is_closing; }
 
 void Session::handle_state_update_alert(const lt::state_update_alert *p) {
     if (p->status.empty())
         return;
 
     for (const lt::torrent_status &status : p->status) {
-        auto hash = to_hex(status.info_hash);
-
-        if (!has_torrent(hash))
-            continue;
-
-        auto torrent = get_torrent(hash);
-        torrent->update_status(status);
+        if (auto torrent = find_torrent(to_hex(status.info_hash)))
+            torrent->update_status(status);
     }
 }
 
 void Session::handle_metadata_received_alert(const lt::metadata_received_alert *p) {
     std::string hash = to_hex(p->handle.info_hash());
-    if (!has_torrent(hash))
+    auto torrent = find_torrent(hash);
+    if (!torrent)
         return;
 
     OATPP_LOGI("Session::handle_metadata_received_alert", "Received metadata for '%s'", hash.c_str());
-    auto torrent = get_torrent(hash);
     torrent->update_metadata();
 }
 
@@ -928,12 +929,8 @@ void Session::handle_session_stats_alert(const lt::session_stats_alert *p) {
 }
 
 void Session::dispatch_alert(const lt::alert *a) {
-    auto hash = to_hex(static_cast<const lt::torrent_alert *>(a)->handle.info_hash());
-    if (!has_torrent(hash))
-        return;
-
-    auto torrent = get_torrent(hash);
-    torrent->dispatch_alert(a);
+    if (auto torrent = find_torrent(to_hex(static_cast<const lt::torrent_alert *>(a)->handle.info_hash())))
+        torrent->dispatch_alert(a);
 }
 
 void Session::remove_temporary_file(std::string &path) {
@@ -949,9 +946,7 @@ void Session::remove_temporary_file(std::string &path) {
 }
 
 void Session::trigger_resume_data() {
-    std::lock_guard<std::mutex> guard(torrentsMutex);
-
-    for (const auto &torrent : m_torrents) {
+    for (const auto &torrent : torrents()) {
         torrent->save_resume_data();
     }
 }

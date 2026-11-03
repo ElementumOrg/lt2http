@@ -3,6 +3,7 @@
 #include <atomic>
 #include <chrono>
 #include <memory>
+#include <mutex>
 
 #include <boost/dynamic_bitset.hpp>
 
@@ -73,8 +74,12 @@ class Torrent : public std::enable_shared_from_this<lh::Torrent> {
     lh::storage_type_t m_storageType;
     TorrentState m_state = TorrentState::Unknown;
 
+    // Files are replaced on the alerts thread, readers are (un)registered on HTTP threads
+    // and iterated on the prioritizer thread.
     std::vector<std::shared_ptr<File>> m_files;
+    mutable std::mutex m_filesMutex;
     std::map<std::int64_t, Reader*> m_readers;
+    mutable std::mutex m_readersMutex;
     std::map<std::string, TrackerInfo> m_trackerInfos;
 
     std::string m_name;
@@ -101,7 +106,7 @@ class Torrent : public std::enable_shared_from_this<lh::Torrent> {
     }
 
     lt::torrent_status &status();
-    std::vector<std::shared_ptr<File>> files();
+    std::vector<std::shared_ptr<File>> files() const;
     std::shared_ptr<File> get_file(int index);
     lt::storage_interface* storage();
 
@@ -207,9 +212,8 @@ class Torrent : public std::enable_shared_from_this<lh::Torrent> {
     int readahead_pieces() const;
 
     bool has_readers() const;
-    std::map<std::int64_t, Reader*> readers() const;
-    void register_reader(std::int64_t id, Reader* reader);
-    void unregister_reader(const std::int64_t &id);
+    void register_reader(Reader *reader);
+    void unregister_reader(std::int64_t id);
 
     void prioritize();
     void update_buffer_progress();

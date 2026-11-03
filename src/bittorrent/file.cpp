@@ -21,10 +21,10 @@ File::File(Torrent* torrent, lt::file_index_t index, std::string file_path, std:
            std::int64_t file_size, std::int64_t file_offset, lt::download_priority_t priority)
     : m_torrent(torrent), m_index(index), m_path(std::move(file_path)), m_name(std::move(file_name)),
       m_size(file_size), m_offset(file_offset), m_isSelected(priority > 0), m_isBuffering(false) {
-    m_config = lh::config();
+    auto const &config = lh::config();
 
-    m_start_buffer_size = m_config.buffer_size * 1024 * 1024;
-    m_end_buffer_size = m_config.end_buffer_size * 1024 * 1024;
+    m_start_buffer_size = std::int64_t(config.buffer_size) * 1024 * 1024;
+    m_end_buffer_size = std::int64_t(config.end_buffer_size) * 1024 * 1024;
 
     auto region = region_pieces(m_offset, m_size, m_torrent->piece_length(), m_torrent->pieces_count());
 
@@ -98,10 +98,6 @@ void File::start_buffer() {
     }
 
     if (m_torrent->is_memory_storage()) {
-        // TODO: Implement adjusting of memory to fit more pieces
-        if (m_config.auto_adjust_memory_size) {
-        }
-
         if (m_buffer_size > m_torrent->memory_size()) {
             OATPP_LOGI("File::start_buffer", "Adjusting memory size to: %s", humanize_bytes(m_buffer_size).c_str())
             m_torrent->memory_size(m_buffer_size);
@@ -135,17 +131,5 @@ void File::set_buffer_progress(double progress) {
 };
 
 std::vector<int> File::buffer_pieces() const { return m_buffer_pieces; };
-
-bool File::has_readers() const { return !m_readers.empty(); }
-
-void File::register_reader(std::int64_t id, Reader* reader) { 
-    m_readers[id] = reader; 
-}
-
-void File::unregister_reader(const std::int64_t id) {
-    if (m_readers.find(id) != m_readers.end()) {
-        m_readers.erase(id);
-    }
-}
 
 } // namespace lh

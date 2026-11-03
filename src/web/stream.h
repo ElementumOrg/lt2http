@@ -64,18 +64,22 @@ class StreamController : public oatpp::web::server::api::ApiController {
             if (rangeHeader == nullptr || rangeHeader->empty())
                 rangeHeader = "bytes=0-";
             auto range = oatpp::web::protocol::http::Range::parse(rangeHeader);
-            if (range.end == 0)
+            if (range.end == 0 || range.end >= file->size())
                 range.end = file->size() - 1;
+            if (range.start < 0 || range.start > range.end) {
+                auto response = createResponse(Status::CODE_416, "");
+                response->putHeader(Header::CONTENT_RANGE, "bytes */" + std::to_string(file->size()));
+                return response;
+            }
 
             OATPP_LOGD("FilesController::stream", "Range: start=%s, end=%s", std::to_string(range.start).c_str(),
                        std::to_string(range.end).c_str())
 
-            std::int64_t contentLength = file->size() - range.start;
+            std::int64_t contentLength = range.end - range.start + 1;
             std::shared_ptr<OutgoingResponse> response = nullptr;
 
             auto reader = std::make_shared<lh::Reader>(torrent, file, range);
-            file->register_reader(reader->id(), reader.get());
-            torrent->register_reader(reader->id(), reader.get());
+            torrent->register_reader(reader.get());
             
             if (request->getStartingLine().method.toString() == "HEAD") {
                 auto body = std::make_shared<oatpp::web::protocol::http::outgoing::EmptyBody>(file->size());

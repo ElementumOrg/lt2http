@@ -1,5 +1,11 @@
 #pragma once
 
+#include <atomic>
+#include <condition_variable>
+#include <functional>
+#include <mutex>
+#include <thread>
+
 #include <libtorrent/add_torrent_params.hpp>
 #include <libtorrent/fwd.hpp>
 #include <libtorrent/session.hpp>
@@ -24,15 +30,24 @@ class Session {
 
     lh::Config m_config;
     std::vector<std::shared_ptr<Torrent>> m_torrents;
+    mutable std::mutex m_torrentsMutex;
 
     bool m_refresh_requested = false;
-    bool m_isClosing = false;
+
+    // Background threads are owned and joined by the session, so they never outlive it.
+    std::vector<std::thread> m_threads;
+    std::atomic<bool> m_isClosing{false};
+    std::mutex m_cvMutex;
+    std::condition_variable m_cv;
+
+    // Waits for the timeout, returns true if the session is closing.
+    bool wait_for_abort(std::chrono::milliseconds timeout);
+    void start_thread(const char *name, std::function<void()> fn);
 
   public:
     explicit Session(lh::Config &config);
     ~Session();
 
-    std::shared_ptr<Config> config();
     void run();
     void check_directories();
     void configure();
@@ -48,9 +63,11 @@ class Session {
 
     std::vector<std::shared_ptr<Torrent>> torrents();
     std::shared_ptr<Torrent> add_torrent(std::string &uri, bool is_paused, lh::storage_type_t st, bool is_first_time, std::chrono::time_point<std::chrono::system_clock> added_time);
-    std::shared_ptr<Torrent> get_torrent(std::string &hash);
-    bool has_torrent(std::string &hash);
-    bool remove_torrent(std::string &hash, bool is_delete_files, bool is_delete_data);
+    std::shared_ptr<Torrent> get_torrent(const std::string &hash) const;
+    // Returns nullptr if the torrent is not found.
+    std::shared_ptr<Torrent> find_torrent(const std::string &hash) const;
+    bool has_torrent(const std::string &hash) const;
+    bool remove_torrent(const std::string &hash, bool is_delete_files, bool is_delete_data);
 
     std::string get_user_agent() const;
     static int get_max_connections();

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <chrono>
 #include <mutex>
 
@@ -27,15 +28,14 @@ class Reader : public oatpp::data::stream::ReadCallback {
 
     std::mutex m_lock;
     std::int64_t m_offset = 0;
-    std::int64_t m_size = 0;
     std::int64_t m_piece_size = 0;
     std::int64_t m_position = 0;
-    int m_piece_start = 0;
+    // Read by the prioritizer thread while read() moves it.
+    std::atomic<int> m_piece_start{0};
     int m_piece_end = 0;
 
-    bool m_isClosing = false;
+    std::atomic<bool> m_isClosing{false};
     bool m_isPrioritized = false;
-    bool m_isIterated = false;
 
     std::chrono::seconds m_piece_timeout{60};
 
@@ -49,9 +49,6 @@ class Reader : public oatpp::data::stream::ReadCallback {
     int piece_end_limit() const;
 
     bool is_closing() const;
-
-    bool is_iterated() const;
-    void set_iterated(bool val);
 
     oatpp::v_io_size read(void *buffer, v_buff_size bufferSize, oatpp::async::Action &action) override;
 

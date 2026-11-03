@@ -99,7 +99,7 @@ struct memory_storage : lt::storage_interface {
     bool is_logging;
     bool is_initialized;
     bool is_reading;
-    bool is_handled;
+    bool is_handled = false;
 
   public:
     explicit memory_storage(lt::storage_params const &params);

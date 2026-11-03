@@ -17,6 +17,9 @@ inline httplib::Result do_request(const std::string &uri) {
     cli.enable_server_certificate_verification(false);
     cli.set_follow_location(true);
     cli.set_compress(true);
+    // The session waits for this request on shutdown, httplib waits 300s to connect by default.
+    cli.set_connection_timeout(10);
+    cli.set_read_timeout(30);
 
     return cli.Get(req_path.c_str());
 }

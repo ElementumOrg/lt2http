@@ -48,9 +48,13 @@ Torrent::~Torrent() { OATPP_LOGI("Torrent", "Destroying: %s", hash().c_str()); }
 
 lt::torrent_status &Torrent::status() { return m_nativeStatus; };
 
-std::vector<std::shared_ptr<File>> Torrent::files() { return m_files; };
+std::vector<std::shared_ptr<File>> Torrent::files() const {
+    std::lock_guard<std::mutex> guard(m_filesMutex);
+    return m_files;
+}
 
 std::shared_ptr<File> Torrent::get_file(int index) {
+    std::lock_guard<std::mutex> guard(m_filesMutex);
     auto match =
         std::find_if(m_files.begin(), m_files.end(), [&index](const std::shared_ptr<File> &t) { return t->index() == index; });
     if (match == m_files.end())
@@ -137,16 +141,16 @@ void Torrent::on_metadata_received() {
     }
 
     m_deadline_pieces.resize(m_nativeInfo->num_pieces());
-    auto files = m_nativeInfo->files();
+    auto const &storage = m_nativeInfo->files();
 
-    m_files.clear();
+    std::vector<std::shared_ptr<File>> files;
     for (int i = 0; i < m_nativeInfo->num_files(); i++) {
-        auto name = std::string(files.file_name(i));
-        auto path = std::string(files.file_path(i));
-        m_files.emplace_back(std::make_shared<lh::File>(this, lt::file_index_t(i), std::string(files.file_path(i)),
-                                               std::string(files.file_name(i)), files.file_size(i), files.file_offset(i),
-                                               file_priority(i)));
+        files.emplace_back(std::make_shared<lh::File>(this, lt::file_index_t(i), storage.file_path(i), storage.file_name(i).to_string(),
+                                                      storage.file_size(i), storage.file_offset(i), file_priority(i)));
     }
+
+    std::lock_guard<std::mutex> guard(m_filesMutex);
+    m_files = std::move(files);
 }
 
 void Torrent::remove(bool is_delete_files, bool is_delete_data) {
@@ -292,9 +296,8 @@ void Torrent::update_state() {
 bool Torrent::has_error() const { return static_cast<bool>(m_nativeStatus.errc); }
 
 bool Torrent::is_buffering() const {
-    auto match = std::find_if(m_files.begin(), m_files.end(),
-                              [](const std::shared_ptr<File> &f) { return f->is_buffering() && f->buffer_progress() < 100; });
-    return match != m_files.end();
+    auto all = files();
+    return std::any_of(all.begin(), all.end(), [](const std::shared_ptr<File> &f) { return f->is_buffering() && f->buffer_progress() < 100; });
 }
 
 bool Torrent::is_paused() const { return m_isStopped; }
@@ -447,11 +450,12 @@ std::vector<double> Torrent::files_progress() const {
     std::vector<int64_t> fp;
     m_nativeHandle.file_progress(fp, lt::torrent_handle::piece_granularity);
 
-    const int count = static_cast<int>(fp.size());
+    auto all = files();
+    const std::size_t count = std::min(fp.size(), all.size());
     std::vector<double> result;
     result.reserve(count);
-    for (int i = 0; i < count; ++i) {
-        const std::int64_t size = m_files[i]->size();
+    for (std::size_t i = 0; i < count; ++i) {
+        const std::int64_t size = all[i]->size();
         if ((size <= 0) || (fp[i] == size))
             result.push_back(1);
         else
@@ -665,7 +669,7 @@ void Torrent::dump(std::stringstream &ss) {
 
     ss << "    Files (Priority):\n";
     auto priorities = m_nativeHandle.get_file_priorities();
-    for (auto &f : m_files) {
+    for (auto &f : files()) {
         auto pr = priorities[f->index()];
         if (pr > 0) {
             ss << Fmt("        <a href=\"%s\" target=_blank>%s</a> (%s): %d \n", f->stream_uri().c_str(), f->path().c_str(),
@@ -726,8 +730,10 @@ void Torrent::dump(std::stringstream &ss) {
     ss << "        ";
 
     std::vector<int> reader_positions;
-    for (const auto& reader : m_readers) {
-        reader_positions.push_back(reader.second->piece_start());
+    {
+        std::lock_guard<std::mutex> guard(m_readersMutex);
+        for (const auto &reader : m_readers)
+            reader_positions.push_back(reader.second->piece_start());
     }
 
     int total_prioritized = 0;
@@ -763,7 +769,7 @@ void Torrent::dump(std::stringstream &ss) {
         }
     }
     ss << Fmt("\n        Readers: <b>%d</b>, Stored: <b>%d</b>, Prioritized: <b>%d</b>",
-                m_readers.size(), total_have, total_prioritized);
+                reader_positions.size(), total_have, total_prioritized);
     ss << "\n\n\n";
     ss << "    " << std::string(150, '*') << "\n";
     ss << "\n\n";
@@ -828,39 +834,40 @@ int Torrent::readahead_pieces() const {
     return lh::file_readahead_pieces;
 };
 
-bool Torrent::has_readers() const { return !m_readers.empty(); };
-
-void Torrent::register_reader(std::int64_t id, Reader* reader) { 
-    m_readers[id] = reader;
+bool Torrent::has_readers() const {
+    std::lock_guard<std::mutex> guard(m_readersMutex);
+    return !m_readers.empty();
 }
 
-void Torrent::unregister_reader(const std::int64_t &id) {
-    if (m_readers.find(id) != m_readers.end()) {
-        m_readers.erase(id);
-    }
+void Torrent::register_reader(Reader *reader) {
+    std::lock_guard<std::mutex> guard(m_readersMutex);
+    m_readers[reader->id()] = reader;
 }
 
-std::map<std::int64_t, Reader*> Torrent::readers() const { return m_readers; };
+void Torrent::unregister_reader(std::int64_t id) {
+    std::lock_guard<std::mutex> guard(m_readersMutex);
+    m_readers.erase(id);
+}
 
 void Torrent::prioritize() {
+    // Held for the whole run: readers unregister in their destructor, so the pointers stay valid while locked.
+    std::lock_guard<std::mutex> guard(m_readersMutex);
+
     int pieces_limit = readahead_pieces();
     int iter_count = -1;
-    int readers_finished = 0;
+    std::size_t readers_finished = 0;
     std::vector<int> reader_pieces;
-
-    for (const auto &p : m_readers) {
-        p.second->set_iterated(false);
-    }
+    std::map<std::int64_t, bool> iterated;
 
     while (readers_finished < m_readers.size() && pieces_limit > 0) {
         iter_count++;
         for (const auto &p : m_readers) {
             int index = p.second->piece_start() + iter_count;
-            if (p.second->is_iterated()) {
+            if (iterated[p.first]) {
                 continue;
             }
             if (p.second->is_closing() || index > p.second->piece_end_limit()) {
-                p.second->set_iterated(true);
+                iterated[p.first] = true;
                 readers_finished++;
                 continue;
             }
@@ -926,7 +933,7 @@ void Torrent::update_buffer_progress() {
     std::vector<lt::partial_piece_info> pieces;
     m_nativeHandle.get_download_queue(pieces);
 
-    for (const auto& file : m_files) {
+    for (const auto& file : files()) {
         if (!file->is_buffering() || file->buffer_progress() >= 100 || file->buffer_size() <= 0)
             continue;
 

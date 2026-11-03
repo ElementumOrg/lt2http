@@ -6,8 +6,6 @@
 #include <boost/stacktrace.hpp>
 #include <libtorrent/version.hpp>
 
-#include <utils/async.h>
-
 #include <app/config.h>
 
 #include <web/files.h>
@@ -24,8 +22,8 @@ namespace lh {
 Application* Application::_inst = nullptr;
 
 Application::Application(int &argc, char *argv[])
-    : m_config(Config(argc, argv))
-    , m_session(Session(m_config)) {}
+    : m_config(argc, argv)
+    , m_session(m_config) {}
 
 Application::~Application() = default;
 
@@ -75,8 +73,8 @@ void Application::run() {
         return !lh::is_closing.load();
     };
 
-    // Run session run in a separate thread.
-    call_async([this] { m_session.run(); });
+    // Loads trackers and previous torrents in a session thread.
+    m_session.run();
 
     server.run(condition);
 

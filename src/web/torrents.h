@@ -344,7 +344,7 @@ class TorrentsController : public oatpp::web::server::api::ApiController {
             auto torrent = lh::session().get_torrent(hash);
             auto tf = torrent->generate();
 
-            return createResponse(Status::CODE_200, oatpp::String(tf.data()));
+            return createResponse(Status::CODE_200, oatpp::String(tf.data(), tf.size()));
         } catch (std::exception &e) {
             OATPP_LOGE("TorrentsController::generate", "Error getting torrent file for torrent: %s", e.what())
 
