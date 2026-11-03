@@ -2,35 +2,22 @@
 
 #include "oatpp/core/macro/codegen.hpp"
 #include "oatpp/parser/json/mapping/ObjectMapper.hpp"
-#include "oatpp/web/protocol/http/outgoing/StreamingBody.hpp"
-#include "oatpp/web/server/api/ApiController.hpp"
-
-#include <boost/algorithm/string.hpp>
 
 #include <libtorrent/download_priority.hpp>
 
 #include <app/application.h>
-#include <app/config.h>
 
-#include <bittorrent/reader.h>
-
-#include <dto/error.h>
 #include <dto/file_info.h>
 #include <dto/file_operation.h>
 #include <dto/file_status.h>
 
-#include <utils/path.h>
-#include <utils/requests.h>
-#include <utils/strings.h>
-
-#include "web/basic_auth.h"
+#include "web/controller.h"
 
 #include OATPP_CODEGEN_BEGIN(ApiController)
 
-class FilesController : public oatpp::web::server::api::ApiController {
+class FilesController : public lh::Controller {
   public:
-    explicit FilesController(OATPP_COMPONENT(std::shared_ptr<ObjectMapper>, objectMapper))
-        : oatpp::web::server::api::ApiController(objectMapper) {}
+    explicit FilesController(OATPP_COMPONENT(std::shared_ptr<ObjectMapper>, objectMapper)) : lh::Controller(objectMapper) {}
 
     static std::shared_ptr<FilesController> createShared(
         OATPP_COMPONENT(std::shared_ptr<ObjectMapper>, objectMapper) // Inject objectMapper component here as default parameter
@@ -56,42 +43,16 @@ class FilesController : public oatpp::web::server::api::ApiController {
             PATH(String, index_param, "index"), 
             QUERY(String, buffer_param, "buffer", "false")
     ) {
-        auto hash = uri_unescape(*hash_param);
-        auto index = -1;
-
-        try {
-            auto is_buffer = uri_unescape(*buffer_param) == "true";
-            index = std::stoi(uri_unescape(*index_param));
-
-            boost::trim(hash);
-            boost::to_lower(hash);
-
+        return fileOperation("FilesController::download", hash_param, index_param, [&](const std::string &hash, int index) {
             OATPP_LOGI("FilesController::download", "Downloading file index '%d' with torrent infohash: %s", index, hash.c_str())
 
-            auto torrent = lh::session().get_torrent(hash);
-            auto file = torrent->get_file(index);
+            auto file = lh::session().get_torrent(hash)->get_file(index);
             file->set_priority(lt::low_priority);
-            if (is_buffer)
+            if (lh::is_true(buffer_param))
                 file->start_buffer();
 
-            auto dto = FileOperationDto::createShared();
-            dto->success = true;
-            dto->hash = hash.c_str();
-            dto->id = index;
-            dto->path = file->path().c_str();
-
-            return createDtoResponse(Status::CODE_200, dto);
-        } catch (std::exception &e) {
-            OATPP_LOGE("FilesController::download", "Error downloading file: %s", e.what())
-
-            auto dto = FileOperationDto::createShared();
-            dto->hash = hash.c_str();
-            dto->id = index;
-            dto->success = false;
-            dto->error = e.what();
-
-            return createDtoResponse(Status::CODE_500, dto);
-        }
+            return fileSuccess(hash, index, file->path());
+        });
     }
 
     ENDPOINT_INFO(stop) {
@@ -107,40 +68,14 @@ class FilesController : public oatpp::web::server::api::ApiController {
             PATH(String, hash_param, "infoHash"),
             PATH(String, index_param, "index")
     ) {
-        auto hash = uri_unescape(*hash_param);
-        auto index = -1;
+        return fileOperation("FilesController::stop", hash_param, index_param, [&](const std::string &hash, int index) {
+            OATPP_LOGI("FilesController::stop", "Stop downloading file index '%d' with torrent infohash: %s", index, hash.c_str())
 
-        try {
-            index = std::stoi(uri_unescape(*index_param));
-
-            boost::trim(hash);
-            boost::to_lower(hash);
-
-            OATPP_LOGI("FilesController::stop", "Stop downloading file index '%d' with torrent infohash: %s", index,
-                       hash.c_str())
-
-            auto torrent = lh::session().get_torrent(hash);
-            auto file = torrent->get_file(index);
+            auto file = lh::session().get_torrent(hash)->get_file(index);
             file->set_priority(lt::dont_download);
 
-            auto dto = FileOperationDto::createShared();
-            dto->success = true;
-            dto->hash = hash.c_str();
-            dto->id = index;
-            dto->path = file->path().c_str();
-
-            return createDtoResponse(Status::CODE_200, dto);
-        } catch (std::exception &e) {
-            OATPP_LOGE("FilesController::stop", "Error stopping download file: %s", e.what())
-
-            auto dto = FileOperationDto::createShared();
-            dto->hash = hash.c_str();
-            dto->id = index;
-            dto->success = false;
-            dto->error = e.what();
-
-            return createDtoResponse(Status::CODE_500, dto);
-        }
+            return fileSuccess(hash, index, file->path());
+        });
     }
 
     ENDPOINT_INFO(info) {
@@ -157,31 +92,11 @@ class FilesController : public oatpp::web::server::api::ApiController {
             PATH(String, index_param, "index"), 
             HEADER(String, hostHeader, Header::HOST)
     ) {
-        auto hash = uri_unescape(*hash_param);
-        auto index = -1;
-
-        try {
-            index = std::stoi(uri_unescape(*index_param));
-
-            boost::trim(hash);
-            boost::to_lower(hash);
-
-            auto torrent = lh::session().get_torrent(hash);
-            auto file = torrent->get_file(index);
-
-            std::string host = "http://" + (*hostHeader);
+        return fileOperation("FilesController::info", hash_param, index_param, [&](const std::string &hash, int index) {
+            auto file = lh::session().get_torrent(hash)->get_file(index);
+            std::string host = "http://" + *hostHeader;
             return createDtoResponse(Status::CODE_200, fileInfoDtoFromFile(file, {}, {}, host, false));
-        } catch (std::exception &e) {
-            OATPP_LOGE("FilesController::info", "Error getting info from file: %s", e.what())
-
-            auto dto = FileOperationDto::createShared();
-            dto->hash = hash.c_str();
-            dto->id = index;
-            dto->success = false;
-            dto->error = e.what();
-
-            return createDtoResponse(Status::CODE_500, dto);
-        }
+        });
     }
 
     ENDPOINT_INFO(status) {
@@ -197,33 +112,13 @@ class FilesController : public oatpp::web::server::api::ApiController {
             PATH(String, hash_param, "infoHash"),
             PATH(String, index_param, "index")
     ) {
-        auto hash = uri_unescape(*hash_param);
-        auto index = -1;
-
-        try {
-            index = std::stoi(uri_unescape(*index_param));
-
-            boost::trim(hash);
-            boost::to_lower(hash);
-
+        return fileOperation("FilesController::status", hash_param, index_param, [&](const std::string &hash, int index) {
             auto torrent = lh::session().get_torrent(hash);
             auto file = torrent->get_file(index);
-            auto completed = torrent->files_completed_bytes();
-            auto progress = torrent->files_progress();
-
-            return createDtoResponse(Status::CODE_200, fileStatusDtoFromFile(file, completed, progress));
-        } catch (std::exception &e) {
-            OATPP_LOGE("FilesController::status", "Error getting status from file: %s", e.what())
-
-            auto dto = FileOperationDto::createShared();
-            dto->hash = hash.c_str();
-            dto->id = index;
-            dto->success = false;
-            dto->error = e.what();
-
-            return createDtoResponse(Status::CODE_500, dto);
-        }
+            return createDtoResponse(Status::CODE_200,
+                                     fileStatusDtoFromFile(file, torrent->files_completed_bytes(), torrent->files_progress()));
+        });
     }
 };
 
-#include OATPP_CODEGEN_BEGIN(ApiController) //<- End Codegen
+#include OATPP_CODEGEN_END(ApiController)

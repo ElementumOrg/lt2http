@@ -46,8 +46,8 @@ class TorrentInfoDto : public oatpp::DTO {
 inline oatpp::Object<TorrentInfoDto> torrentInfoDtoFromTorrent(const std::shared_ptr<lh::Torrent>& torrent, bool is_status) {
     auto dto = TorrentInfoDto::createShared();
 
-    dto->hash = torrent->hash().c_str();
-    dto->name = torrent->name().c_str();
+    dto->hash = torrent->hash();
+    dto->name = torrent->name();
     dto->size = torrent->size();
     dto->has_metadata = torrent->has_metadata();
     dto->is_memory_storage = torrent->is_memory_storage();

@@ -2,31 +2,21 @@
 
 #include "oatpp/core/macro/codegen.hpp"
 #include "oatpp/parser/json/mapping/ObjectMapper.hpp"
-#include "oatpp/web/server/api/ApiController.hpp"
-
-#include <boost/algorithm/string.hpp>
 
 #include <app/application.h>
-#include <app/config.h>
 
 #include <dto/error.h>
 #include <dto/file_info.h>
-#include <dto/torrent_add.h>
 #include <dto/torrent_info.h>
 #include <dto/torrent_operation.h>
 
-#include <oatpp/core/Types.hpp>
-#include <utils/path.h>
-#include <utils/strings.h>
-
-#include "web/basic_auth.h"
+#include "web/controller.h"
 
 #include OATPP_CODEGEN_BEGIN(ApiController)
 
-class TorrentsController : public oatpp::web::server::api::ApiController {
+class TorrentsController : public lh::Controller {
   public:
-    explicit TorrentsController(OATPP_COMPONENT(std::shared_ptr<ObjectMapper>, objectMapper))
-        : oatpp::web::server::api::ApiController(objectMapper) {}
+    explicit TorrentsController(OATPP_COMPONENT(std::shared_ptr<ObjectMapper>, objectMapper)) : lh::Controller(objectMapper) {}
 
     static std::shared_ptr<TorrentsController> createShared(
         OATPP_COMPONENT(std::shared_ptr<ObjectMapper>, objectMapper) // Inject objectMapper component here as default parameter
@@ -44,29 +34,17 @@ class TorrentsController : public oatpp::web::server::api::ApiController {
         info->addResponse<List<Object<TorrentInfoDto>>>(Status::CODE_200, "application/json");
         info->addResponse<Object<ErrorDto>>(Status::CODE_500, "application/json");
     }
-    ENDPOINT("GET", "/torrents", list, 
-        QUERY(String, status_param, "status", "false") 
+    ENDPOINT("GET", "/torrents", list,
+        QUERY(String, status_param, "status", "false")
     ) {
-        try {
-            auto is_status = uri_unescape(*status_param) == "true";
-
+        return operation<ErrorDto>("TorrentsController::list", [&] {
+            auto is_status = lh::is_true(status_param);
             auto list = oatpp::List<oatpp::Object<TorrentInfoDto>>::createShared();
-
-            auto torrents = lh::session().torrents();
-            for (auto &torrent : torrents) {
+            for (const auto &torrent : lh::session().torrents())
                 list->push_back(torrentInfoDtoFromTorrent(torrent, is_status));
-            }
 
             return createDtoResponse(Status::CODE_200, list);
-            // OATPP_ASSERT_HTTP(res, Status::CODE_500, ("Error adding torrent"));
-        } catch (std::exception &e) {
-            OATPP_LOGE("TorrentsController::torrents", "Error getting torrents: %s", e.what())
-
-            auto dto = ErrorDto::createShared();
-            dto->error = e.what();
-
-            return createDtoResponse(Status::CODE_500, dto);
-        }
+        });
     }
 
     ENDPOINT_INFO(remove) {
@@ -85,39 +63,16 @@ class TorrentsController : public oatpp::web::server::api::ApiController {
         info->addResponse<Object<TorrentOperationDto>>(Status::CODE_200, "application/json");
         info->addResponse<Object<TorrentOperationDto>>(Status::CODE_500, "application/json");
     }
-    ENDPOINT("GET", "/torrents/{infoHash}/remove", remove, 
+    ENDPOINT("GET", "/torrents/{infoHash}/remove", remove,
         PATH(String, hash_param, "infoHash"),
-        QUERY(String, delete_files_param, "deleteFiles", "true"), 
+        QUERY(String, delete_files_param, "deleteFiles", "true"),
         QUERY(String, delete_data_param, "deleteData", "false")
     ) {
-        auto hash = uri_unescape(*hash_param);
-
-        try {
-            auto is_delete_files = uri_unescape(*delete_files_param) == "true";
-            auto is_delete_data = uri_unescape(*delete_data_param) == "true";
-
-            boost::trim(hash);
-            boost::to_lower(hash);
-
+        return torrentOperation("TorrentsController::remove", hash_param, [&](const std::string &hash) {
             OATPP_LOGI("TorrentsController::remove", "Removing torrent with infohash: %s", hash.c_str())
-
-            lh::session().remove_torrent(hash, is_delete_files, is_delete_data);
-
-            auto dto = TorrentOperationDto::createShared();
-            dto->success = true;
-            dto->hash = hash.c_str();
-
-            return createDtoResponse(Status::CODE_200, dto);
-        } catch (std::exception &e) {
-            OATPP_LOGE("TorrentsController::remove", "Error removing torrent: %s", e.what())
-
-            auto dto = TorrentOperationDto::createShared();
-            dto->hash = hash.c_str();
-            dto->success = false;
-            dto->error = e.what();
-
-            return createDtoResponse(Status::CODE_500, dto);
-        }
+            lh::session().remove_torrent(hash, lh::is_true(delete_files_param), lh::is_true(delete_data_param));
+            return torrentSuccess(hash);
+        });
     }
 
     ENDPOINT_INFO(resume) {
@@ -128,35 +83,14 @@ class TorrentsController : public oatpp::web::server::api::ApiController {
         info->addResponse<Object<TorrentOperationDto>>(Status::CODE_200, "application/json");
         info->addResponse<Object<TorrentOperationDto>>(Status::CODE_500, "application/json");
     }
-    ENDPOINT("GET", "/torrents/{infoHash}/resume", resume, 
+    ENDPOINT("GET", "/torrents/{infoHash}/resume", resume,
         PATH(String, hash_param, "infoHash")
     ) {
-        auto hash = uri_unescape(*hash_param);
-
-        try {
-            boost::trim(hash);
-            boost::to_lower(hash);
-
+        return torrentOperation("TorrentsController::resume", hash_param, [&](const std::string &hash) {
             OATPP_LOGI("TorrentsController::resume", "Resuming torrent with infohash: %s", hash.c_str())
-
-            auto torrent = lh::session().get_torrent(hash);
-            torrent->resume();
-
-            auto dto = TorrentOperationDto::createShared();
-            dto->success = true;
-            dto->hash = hash.c_str();
-
-            return createDtoResponse(Status::CODE_200, dto);
-        } catch (std::exception &e) {
-            OATPP_LOGE("TorrentsController::resume", "Error resuming torrent: %s", e.what())
-
-            auto dto = TorrentOperationDto::createShared();
-            dto->hash = hash.c_str();
-            dto->success = false;
-            dto->error = e.what();
-
-            return createDtoResponse(Status::CODE_500, dto);
-        }
+            lh::session().get_torrent(hash)->resume();
+            return torrentSuccess(hash);
+        });
     }
 
     ENDPOINT_INFO(pause) {
@@ -167,35 +101,14 @@ class TorrentsController : public oatpp::web::server::api::ApiController {
         info->addResponse<Object<TorrentOperationDto>>(Status::CODE_200, "application/json");
         info->addResponse<Object<TorrentOperationDto>>(Status::CODE_500, "application/json");
     }
-    ENDPOINT("GET", "/torrents/{infoHash}/pause", pause, 
+    ENDPOINT("GET", "/torrents/{infoHash}/pause", pause,
         PATH(String, hash_param, "infoHash")
     ) {
-        auto hash = uri_unescape(*hash_param);
-
-        try {
-            boost::trim(hash);
-            boost::to_lower(hash);
-
+        return torrentOperation("TorrentsController::pause", hash_param, [&](const std::string &hash) {
             OATPP_LOGI("TorrentsController::pause", "Pausing torrent with infohash: %s", hash.c_str())
-
-            auto torrent = lh::session().get_torrent(hash);
-            torrent->pause();
-
-            auto dto = TorrentOperationDto::createShared();
-            dto->success = true;
-            dto->hash = hash.c_str();
-
-            return createDtoResponse(Status::CODE_200, dto);
-        } catch (std::exception &e) {
-            OATPP_LOGE("TorrentsController::pause", "Error pausing torrent: %s", e.what())
-
-            auto dto = TorrentOperationDto::createShared();
-            dto->hash = hash.c_str();
-            dto->success = false;
-            dto->error = e.what();
-
-            return createDtoResponse(Status::CODE_500, dto);
-        }
+            lh::session().get_torrent(hash)->pause();
+            return torrentSuccess(hash);
+        });
     }
 
     ENDPOINT_INFO(info) {
@@ -210,32 +123,15 @@ class TorrentsController : public oatpp::web::server::api::ApiController {
         info->addResponse<Object<TorrentInfoDto>>(Status::CODE_200, "application/json");
         info->addResponse<Object<TorrentOperationDto>>(Status::CODE_500, "application/json");
     }
-    ENDPOINT("GET", "/torrents/{infoHash}/info", info, 
+    ENDPOINT("GET", "/torrents/{infoHash}/info", info,
         PATH(String, hash_param, "infoHash"),
         QUERY(String, status_param, "status", "false")
     ) {
-        auto hash = uri_unescape(*hash_param);
-        auto is_status = uri_unescape(*status_param) == "true";
-
-        try {
-            boost::trim(hash);
-            boost::to_lower(hash);
-
+        return torrentOperation("TorrentsController::info", hash_param, [&](const std::string &hash) {
             OATPP_LOGI("TorrentsController::info", "Getting torrent info with infohash: %s", hash.c_str())
-
             auto torrent = lh::session().get_torrent(hash);
-
-            return createDtoResponse(Status::CODE_200, torrentInfoDtoFromTorrent(torrent, is_status));
-        } catch (std::exception &e) {
-            OATPP_LOGE("TorrentsController::info", "Error getting info for torrent: %s", e.what())
-
-            auto dto = TorrentOperationDto::createShared();
-            dto->hash = hash.c_str();
-            dto->success = false;
-            dto->error = e.what();
-
-            return createDtoResponse(Status::CODE_500, dto);
-        }
+            return createDtoResponse(Status::CODE_200, torrentInfoDtoFromTorrent(torrent, lh::is_true(status_param)));
+        });
     }
 
     ENDPOINT_INFO(status) {
@@ -246,30 +142,14 @@ class TorrentsController : public oatpp::web::server::api::ApiController {
         info->addResponse<Object<TorrentStatusDto>>(Status::CODE_200, "application/json");
         info->addResponse<Object<TorrentOperationDto>>(Status::CODE_500, "application/json");
     }
-    ENDPOINT("GET", "/torrents/{infoHash}/status", status, 
+    ENDPOINT("GET", "/torrents/{infoHash}/status", status,
         PATH(String, hash_param, "infoHash")
     ) {
-        auto hash = uri_unescape(*hash_param);
-
-        try {
-            boost::trim(hash);
-            boost::to_lower(hash);
-
+        return torrentOperation("TorrentsController::status", hash_param, [&](const std::string &hash) {
             OATPP_LOGI("TorrentsController::status", "Getting torrent status with infohash: %s", hash.c_str())
-
             auto torrent = lh::session().get_torrent(hash);
-
             return createDtoResponse(Status::CODE_200, torrentStatusDtoFromTorrent(torrent));
-        } catch (std::exception &e) {
-            OATPP_LOGE("TorrentsController::status", "Error getting status for torrent: %s", e.what())
-
-            auto dto = TorrentOperationDto::createShared();
-            dto->hash = hash.c_str();
-            dto->success = false;
-            dto->error = e.what();
-
-            return createDtoResponse(Status::CODE_500, dto);
-        }
+        });
     }
 
     ENDPOINT_INFO(files) {
@@ -284,78 +164,42 @@ class TorrentsController : public oatpp::web::server::api::ApiController {
         info->addResponse<List<Object<FileInfoDto>>>(Status::CODE_200, "application/json");
         info->addResponse<Object<TorrentOperationDto>>(Status::CODE_500, "application/json");
     }
-    ENDPOINT("GET", "/torrents/{infoHash}/files", files, 
+    ENDPOINT("GET", "/torrents/{infoHash}/files", files,
         PATH(String, hash_param, "infoHash"),
-        QUERY(String, status_param, "status", "false"), 
+        QUERY(String, status_param, "status", "false"),
         HEADER(String, hostHeader, Header::HOST)
     ) {
-        auto hash = uri_unescape(*hash_param);
-        auto is_status = uri_unescape(*status_param) == "true";
-
-        try {
-            boost::trim(hash);
-            boost::to_lower(hash);
-
+        return torrentOperation("TorrentsController::files", hash_param, [&](const std::string &hash) {
             OATPP_LOGI("TorrentsController::files", "Getting torrent files with infohash: %s", hash.c_str())
 
             auto torrent = lh::session().get_torrent(hash);
-
-            auto list = oatpp::List<oatpp::Object<FileInfoDto>>::createShared();
+            auto is_status = lh::is_true(status_param);
             auto completed = torrent->files_completed_bytes();
             auto progress = torrent->files_progress();
-            std::string host = "http://" + (*hostHeader);
+            std::string host = "http://" + *hostHeader;
 
-            for (auto &file : torrent->files()) {
+            auto list = oatpp::List<oatpp::Object<FileInfoDto>>::createShared();
+            for (const auto &file : torrent->files())
                 list->push_back(fileInfoDtoFromFile(file, completed, progress, host, is_status));
-            }
 
             return createDtoResponse(Status::CODE_200, list);
-        } catch (std::exception &e) {
-            OATPP_LOGE("TorrentsController::files", "Error getting torrent files for torrent: %s", e.what())
-
-            auto dto = TorrentOperationDto::createShared();
-            dto->hash = hash.c_str();
-            dto->success = false;
-            dto->error = e.what();
-
-            return createDtoResponse(Status::CODE_500, dto);
-        }
+        });
     }
 
     ENDPOINT_INFO(generate) {
         info->summary = "Generate torrent file for torrent, identified by InfoHash";
 
         info->pathParams.add<String>("infoHash").description = "Torrent InfoHash";
-
-        // info->addResponse<Object<TorrentStatusDto>>(Status::CODE_200, "application/json");
-        // info->addResponse<Object<TorrentOperationDto>>(Status::CODE_500, "application/json");
     }
-    ENDPOINT("GET", "/torrents/{infoHash}/generate", generate, 
+    ENDPOINT("GET", "/torrents/{infoHash}/generate", generate,
         PATH(String, hash_param, "infoHash")
     ) {
-        auto hash = uri_unescape(*hash_param);
-
-        try {
-            boost::trim(hash);
-            boost::to_lower(hash);
-
+        return torrentOperation("TorrentsController::generate", hash_param, [&](const std::string &hash) {
             OATPP_LOGI("TorrentsController::generate", "Getting torrent file with infohash: %s", hash.c_str())
-
-            auto torrent = lh::session().get_torrent(hash);
-            auto tf = torrent->generate();
-
+            auto tf = lh::session().get_torrent(hash)->generate();
             return createResponse(Status::CODE_200, oatpp::String(tf.data(), tf.size()));
-        } catch (std::exception &e) {
-            OATPP_LOGE("TorrentsController::generate", "Error getting torrent file for torrent: %s", e.what())
-
-            auto dto = TorrentOperationDto::createShared();
-            dto->hash = hash.c_str();
-            dto->success = false;
-            dto->error = e.what();
-
-            return createDtoResponse(Status::CODE_500, dto);
-        }
+        });
     }
 };
 
-#include OATPP_CODEGEN_BEGIN(ApiController) //<- End Codegen
+#include OATPP_CODEGEN_END(ApiController)

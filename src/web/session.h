@@ -4,13 +4,11 @@
 
 #include "oatpp/core/macro/codegen.hpp"
 #include "oatpp/parser/json/mapping/ObjectMapper.hpp"
-#include "oatpp/web/server/api/ApiController.hpp"
 #include "oatpp/web/mime/multipart/InMemoryDataProvider.hpp"
 #include "oatpp/web/mime/multipart/PartList.hpp"
 #include "oatpp/web/mime/multipart/Reader.hpp"
 
 #include <app/application.h>
-#include <app/config.h>
 
 #include <dto/error.h>
 #include <dto/torrent_add.h>
@@ -22,16 +20,34 @@
 #include <utils/path.h>
 #include <utils/strings.h>
 
-#include "web/basic_auth.h"
+#include "web/controller.h"
 
 #include OATPP_CODEGEN_BEGIN(ApiController)
 
 namespace multipart = oatpp::web::mime::multipart;
 
-class SessionController : public oatpp::web::server::api::ApiController {
+class SessionController : public lh::Controller {
+  private:
+    Response sessionSuccess() {
+        auto dto = SessionOperationDto::createShared();
+        dto->success = true;
+        return createDtoResponse(Status::CODE_200, dto);
+    }
+
+    Response torrentAdded(const std::shared_ptr<lh::Torrent> &torrent) {
+        auto dto = TorrentAddDto::createShared();
+        dto->success = true;
+        dto->hash = torrent->hash();
+        dto->has_metadata = torrent->has_metadata();
+        return createDtoResponse(Status::CODE_200, dto);
+    }
+
+    static std::string temporary_torrent_path() {
+        return path_append(lh::config().torrents_path, "tmp_" + get_random_numeric(10) + ".torrent");
+    }
+
   public:
-    explicit SessionController(OATPP_COMPONENT(std::shared_ptr<ObjectMapper>, objectMapper))
-        : oatpp::web::server::api::ApiController(objectMapper) {}
+    explicit SessionController(OATPP_COMPONENT(std::shared_ptr<ObjectMapper>, objectMapper)) : lh::Controller(objectMapper) {}
 
     static std::shared_ptr<SessionController> createShared(
         OATPP_COMPONENT(std::shared_ptr<ObjectMapper>, objectMapper) // Inject objectMapper component here as default parameter
@@ -52,8 +68,7 @@ class SessionController : public oatpp::web::server::api::ApiController {
             << R"(<meta http-equiv="refresh" content="30">)"
             <<  "</head><body>";
 
-        auto torrents = lh::session().torrents();
-        for (auto &torrent : torrents) {
+        for (const auto &torrent : lh::session().torrents()) {
             ss << "<pre>";
             torrent->dump(ss);
             ss << "</pre>";
@@ -61,7 +76,7 @@ class SessionController : public oatpp::web::server::api::ApiController {
 
         ss << "</body></html>";
 
-        return createResponse(Status::CODE_200, ss.str().c_str());
+        return createResponse(Status::CODE_200, ss.str());
     }
 
     ENDPOINT_INFO(status) {
@@ -71,17 +86,9 @@ class SessionController : public oatpp::web::server::api::ApiController {
         info->addResponse<Object<ErrorDto>>(Status::CODE_500, "application/json");
     }
     ENDPOINT("GET", "/status", status) {
-        try {
-            auto &session = lh::session();
-            return createDtoResponse(Status::CODE_200, sessionStatusDtoFromSession(session));
-        } catch (std::exception &e) {
-            OATPP_LOGE("SessionController::status", "Error getting status: %s", e.what())
-
-            auto dto = ErrorDto::createShared();
-            dto->error = e.what();
-
-            return createDtoResponse(Status::CODE_500, dto);
-        }
+        return operation<ErrorDto>("SessionController::status", [&] {
+            return createDtoResponse(Status::CODE_200, sessionStatusDtoFromSession(lh::session()));
+        });
     }
 
     ENDPOINT_INFO(resume) {
@@ -91,24 +98,11 @@ class SessionController : public oatpp::web::server::api::ApiController {
         info->addResponse<Object<SessionOperationDto>>(Status::CODE_500, "application/json");
     }
     ENDPOINT("GET", "/resume", resume) {
-        try {
+        return operation<SessionOperationDto>("SessionController::resume", [&] {
             OATPP_LOGI("SessionController::resume", "Resuming session")
-
             lh::session().resume();
-
-            auto dto = SessionOperationDto::createShared();
-            dto->success = true;
-
-            return createDtoResponse(Status::CODE_200, dto);
-        } catch (std::exception &e) {
-            OATPP_LOGE("SessionController::resume", "Error resuming torrent: %s", e.what())
-
-            auto dto = SessionOperationDto::createShared();
-            dto->success = false;
-            dto->error = e.what();
-
-            return createDtoResponse(Status::CODE_500, dto);
-        }
+            return sessionSuccess();
+        });
     }
 
     ENDPOINT_INFO(pause) {
@@ -118,24 +112,11 @@ class SessionController : public oatpp::web::server::api::ApiController {
         info->addResponse<Object<SessionOperationDto>>(Status::CODE_500, "application/json");
     }
     ENDPOINT("GET", "/pause", pause) {
-        try {
+        return operation<SessionOperationDto>("SessionController::pause", [&] {
             OATPP_LOGI("SessionController::pause", "Pausing session")
-
             lh::session().pause();
-
-            auto dto = SessionOperationDto::createShared();
-            dto->success = true;
-
-            return createDtoResponse(Status::CODE_200, dto);
-        } catch (std::exception &e) {
-            OATPP_LOGE("SessionController::pause", "Error pausing session: %s", e.what())
-
-            auto dto = SessionOperationDto::createShared();
-            dto->success = false;
-            dto->error = e.what();
-
-            return createDtoResponse(Status::CODE_500, dto);
-        }
+            return sessionSuccess();
+        });
     }
 
     ENDPOINT_INFO(add_file) {
@@ -155,8 +136,8 @@ class SessionController : public oatpp::web::server::api::ApiController {
             QUERY(String, storage_param, "storage", "automatic"),
             REQUEST(std::shared_ptr<IncomingRequest>, request)
     ) {
-        try {
-            auto storage = lh::from_string<lh::storage_type_t, lh::js_storage_type_t_string_struct>(storage_param->c_str());
+        return operation<TorrentAddDto>("SessionController::add_file", [&] {
+            auto storage = lh::from_string<lh::storage_type_t, lh::js_storage_type_t_string_struct>(*storage_param);
             auto multipart = std::make_shared<multipart::PartList>(request->getHeaders());
             multipart::Reader reader(multipart.get());
             reader.setDefaultPartReader(multipart::createInMemoryPartReader(10 * 1024 * 1024 /* max-data-size per part */));
@@ -167,29 +148,13 @@ class SessionController : public oatpp::web::server::api::ApiController {
             if (!file)
                 throw std::invalid_argument("Request has no 'file' part");
             auto data = file->getPayload()->getInMemoryData();
-            std::string uri = path_append(lh::config().torrents_path, "tmp_" + get_random_numeric(10) + ".torrent");
+            auto uri = temporary_torrent_path();
 
             OATPP_LOGI("SessionController::add_file", "Saving uploaded file to: %s", uri.c_str())
-
             save_file(uri, data->c_str(), data->size());
 
-            auto torrent = lh::session().add_torrent(uri, false, storage, true, std::chrono::system_clock::now());
-
-            auto dto = TorrentAddDto::createShared();
-            dto->success = true;
-            dto->hash = torrent->hash().c_str();
-            dto->has_metadata = torrent->has_metadata();
-
-            return createDtoResponse(Status::CODE_200, dto);
-        } catch (std::exception &e) {
-            OATPP_LOGE("SessionController::add_file", "Error adding torrent: %s", e.what())
-
-            auto dto = TorrentAddDto::createShared();
-            dto->success = false;
-            dto->error = e.what();
-
-            return createDtoResponse(Status::CODE_500, dto);
-        }
+            return torrentAdded(lh::session().add_torrent(uri, false, storage, true, std::chrono::system_clock::now()));
+        });
     }
 
     ENDPOINT_INFO(add_uri) {
@@ -209,44 +174,28 @@ class SessionController : public oatpp::web::server::api::ApiController {
             QUERY(String, uri_param, "uri", ""),
             QUERY(String, storage_param, "storage", "automatic")
     ) {
-        try {
+        return operation<TorrentAddDto>("SessionController::add_uri", [&] {
             auto uri = uri_unescape(*uri_param);
-            auto storage = lh::from_string<lh::storage_type_t, lh::js_storage_type_t_string_struct>(storage_param->c_str());
+            auto storage = lh::from_string<lh::storage_type_t, lh::js_storage_type_t_string_struct>(*storage_param);
 
             if (uri.rfind("http", 0) == 0) {
                 OATPP_LOGI("SessionController::add_uri", "Downloading torrent file from: %s", uri.c_str());
 
                 auto res = do_request(uri);
-                if (res == nullptr)
+                if (!res)
                     throw lh::Exception(Fmt("Could not download file from url '%s'. Response: null", uri.c_str()));
                 if (res->status != 200)
                     throw lh::Exception(Fmt("Could not download file from url '%s'. Status: %d", uri.c_str(), res->status));
 
-                uri = path_append(lh::config().torrents_path, "tmp_" + get_random_numeric(10) + ".torrent");
+                uri = temporary_torrent_path();
 
-                OATPP_LOGI("SessionController::add_file", "Saving uploaded file to: %s", uri.c_str())
-
+                OATPP_LOGI("SessionController::add_uri", "Saving downloaded file to: %s", uri.c_str())
                 save_file(uri, res->body.c_str(), res->body.size());
             }
 
-            auto torrent = lh::session().add_torrent(uri, false, storage, true, std::chrono::system_clock::now());
-
-            auto dto = TorrentAddDto::createShared();
-            dto->success = true;
-            dto->hash = torrent->hash().c_str();
-            dto->has_metadata = torrent->has_metadata();
-
-            return createDtoResponse(Status::CODE_200, dto);
-        } catch (std::exception &e) {
-            OATPP_LOGE("SessionController::add_uri", "Error adding torrent: %s", e.what())
-
-            auto dto = TorrentAddDto::createShared();
-            dto->success = false;
-            dto->error = e.what();
-
-            return createDtoResponse(Status::CODE_500, dto);
-        }
+            return torrentAdded(lh::session().add_torrent(uri, false, storage, true, std::chrono::system_clock::now()));
+        });
     }
 };
 
-#include OATPP_CODEGEN_BEGIN(ApiController) //<- End Codegen
+#include OATPP_CODEGEN_END(ApiController)

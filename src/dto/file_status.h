@@ -44,7 +44,8 @@ class FileStatusDto : public oatpp::DTO {
 
 #include OATPP_CODEGEN_END(DTO)
 
-inline oatpp::Object<FileStatusDto> fileStatusDtoFromFile(const std::shared_ptr<lh::File>& file, std::vector<std::int64_t> completed, std::vector<double> progress) {
+inline oatpp::Object<FileStatusDto> fileStatusDtoFromFile(const std::shared_ptr<lh::File> &file, const std::vector<std::int64_t> &completed,
+                                                         const std::vector<double> &progress) {
     auto dto = FileStatusDto::createShared();
 
     dto->total = file->size();

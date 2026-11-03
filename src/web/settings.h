@@ -8,7 +8,6 @@
 
 #include <app/application.h>
 
-#include "web/basic_auth.h"
 
 #include OATPP_CODEGEN_BEGIN(ApiController)
 
@@ -59,4 +58,4 @@ class SettingsController : public oatpp::web::server::api::ApiController {
     }
 };
 
-#include OATPP_CODEGEN_BEGIN(ApiController) //<- End Codegen
+#include OATPP_CODEGEN_END(ApiController)

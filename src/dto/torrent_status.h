@@ -118,7 +118,7 @@ inline oatpp::Object<TorrentStatusDto> torrentStatusDtoFromTorrent(const std::sh
     dto->upload_rate = torrent->upload_rate();
 
     dto->state = int(torrent->state());
-    dto->state_string = torrent->state_string().c_str();
+    dto->state_string = torrent->state_string();
 
     dto->seeders = torrent->seeds_count();
     dto->seeders_total = torrent->total_seeds_count();
