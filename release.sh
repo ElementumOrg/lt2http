@@ -4,7 +4,7 @@ set -e
 
 TAG=$(git describe --tags)
 
-git submodule update --init --recursive --remote --no-fetch --depth=1
+git submodule update --init --recursive --depth=1
 
 # Compile all binaries
 mkdir -p build/binaries/

@@ -1,67 +1,23 @@
+# Build from the repository root: make env PLATFORM=windows-x64
 FROM elementumorg/cross-compiler:windows-x64
 
-ENV CMAKE_FLAGS -DCMAKE_TOOLCHAIN_FILE=/build/toolchains/mingw.cmake
-ENV USE_STATIC ON
+ENV TARGET_SYSTEM="Windows" \
+    TARGET_PROCESSOR="x86_64" \
+    TARGET_CC="${CROSS_TRIPLE}-gcc-posix" \
+    TARGET_CXX="${CROSS_TRIPLE}-g++-posix" \
+    TARGET_FLAGS="-D_WIN32_WINNT=0x0600 -DWIN32_LEAN_AND_MEAN" \
+    BOOST_CONFIG="using gcc : : ${CROSS_TRIPLE}-g++-posix ;" \
+    BOOST_OPTS="target-os=windows address-model=64 architecture=x86 threadapi=win32" \
+    OPENSSL_OPTS="mingw64" \
+    LIBTORRENT_FLAGS="-DIPV6_TCLASS=39 -DUNICODE -D_UNICODE" \
+    CMAKE_TOOLCHAIN_FILE="/usr/share/lt2http/cross.cmake"
 
-RUN mkdir -p /build
-WORKDIR /build
+COPY cmake/toolchains/cross.cmake /usr/share/lt2http/
+COPY scripts/install_dependencies.sh scripts/versions.env /usr/share/lt2http/
 
-ARG BOOST_VERSION
-ARG BOOST_SHA256
-ARG OPENSSL_VERSION
-ARG OPENSSL_SHA256
-ARG LIBTORRENT_VERSION
-ARG OATPP_VERSION
-ARG OATPP_SWAGGER_VERSION
-ARG MIMALLOC_VERSION
-ARG CMAKE_VERSION
-ARG BT_VERSION
-
-COPY deps /build/
-COPY common.sh /build/
-COPY toolchains /build/toolchains
-
-# Install Backtrace
-COPY build-backtrace.sh /build/
-ENV BT_CC ${CROSS_TRIPLE}-gcc-posix
-ENV BT_CXX ${CROSS_TRIPLE}-g++-posix
-RUN ./build-backtrace.sh
-
-# Install Boost.System
-COPY build-boost.sh /build/
-COPY boost-statx-disable.patch /build/
-ENV BOOST_CC gcc
-ENV BOOST_CXX g++
-ENV BOOST_OS mingw64
-ENV BOOST_TARGET_OS windows
-ENV BOOST_OPTS address-model=64 architecture=x86 threadapi=win32
-RUN ./build-boost.sh
-
-# Install OpenSSL
-COPY build-openssl.sh /build/
-ENV OPENSSL_OPTS mingw64
-RUN ./build-openssl.sh
-
-# Install CMake
-COPY build-cmake.sh /build/
-RUN ./build-cmake.sh
-
-# Install Oatpp
-COPY build-oatpp.sh /build/
-ENV OATPP_CC ${CROSS_TRIPLE}-gcc-posix
-ENV OATPP_CXX ${CROSS_TRIPLE}-g++-posix
-RUN ./build-oatpp.sh
-
-# Install Mimalloc
-COPY build-mimalloc.sh /build/
-ENV MI_CC ${CROSS_TRIPLE}-gcc-posix
-ENV MI_CXX ${CROSS_TRIPLE}-g++-posix
-RUN ./build-mimalloc.sh
-
-# Install libtorrent
-COPY build-libtorrent.sh /build/
-ENV LT_CC ${CROSS_TRIPLE}-gcc-posix
-ENV LT_CXX ${CROSS_TRIPLE}-g++-posix
-ENV LT_FLAGS -lmswsock -DUNICODE -D_UNICODE -DIPV6_TCLASS=39
-ENV LT_LIBS -lmswsock
-RUN ./build-libtorrent.sh
+# One layer per dependency, so a failing step does not rebuild the ones before it
+RUN /usr/share/lt2http/install_dependencies.sh cmake backtrace
+RUN /usr/share/lt2http/install_dependencies.sh boost
+RUN /usr/share/lt2http/install_dependencies.sh openssl
+RUN /usr/share/lt2http/install_dependencies.sh oatpp oatpp-swagger
+RUN /usr/share/lt2http/install_dependencies.sh libtorrent

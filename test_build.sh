@@ -1,35 +1,30 @@
-#/bin/sh
+#!/bin/bash
+# Development helper: builds lt2http for linux-x64 and copies it into the local Kodi installation.
+set -e
 
-function test {
-  echo "+ $@"
-  "$@"
-  local status=$?
-  if [ $status -ne 0 ]; then
-    exit $status
-  fi
-  return $status
-}
+KODI_BIN_DIRS="$HOME/.kodi/addons/service.lt2http/resources/bin/linux-x64 $HOME/.kodi/userdata/addon_data/service.lt2http/bin/linux-x64"
 
-GIT_VERSION=`git describe --tags`
-rm -f build/linux-x64/CMakeCache.txt 2>&1 >/dev/null
+case "$1" in
+local)
+  # Native build, needs dependencies from 'make local-env'
+  make local
+  files=build/cmake/local/lt2http
+  ;;
+sanitize)
+  make local BUILD_TYPE=RelWithDebInfo CMAKE_FLAGS=-Denable_sanitizers=ON
+  files=build/cmake/local/lt2http
+  ;;
+docker)
+  make linux-x64 linux-x64-shared
+  files="build/linux-x64/lt2http build/linux-x64/lt2http.so"
+  ;;
+*)
+  echo "Usage: $0 local|sanitize|docker"
+  exit 1
+  ;;
+esac
 
-if [ "$1" == "local" ]
-then
-  set -e
-  test make lt2http TARGET_OS=linux TARGET_ARCH=x64 GIT_VERSION=${GIT_VERSION} CROSS_ROOT=/usr/ CROSS_TRIPLE=x86_64-linux-gnu
-  test chmod +x build/out/lt2http
-  test cp -rf build/out/lt2http $HOME/.kodi/addons/service.lt2http/resources/bin/linux-x64/
-  test cp -rf build/out/lt2http $HOME/.kodi/userdata/addon_data/service.lt2http/bin/linux-x64/
-elif [ "$1" == "sanitize" ]
-then
-  set -e
-  test make lt2http TARGET_OS=linux TARGET_ARCH=x64 GIT_VERSION=${GIT_VERSION} CROSS_ROOT=/usr/ CROSS_TRIPLE=x86_64-linux-gnu CMAKE_BUILD_TYPE=RelWithDebInfo
-  test chmod +x build/out/lt2http
-  test cp -rf build/out/lt2http $HOME/.kodi/addons/service.lt2http/resources/bin/linux-x64/
-  test cp -rf build/out/lt2http $HOME/.kodi/userdata/addon_data/service.lt2http/bin/linux-x64/
-elif [ "$1" == "docker" ]
-then
-  test make linux-x64
-  test cp -rf build/linux-x64/out/lt2http $HOME/.kodi/addons/service.lt2http/resources/bin/linux-x64/
-  test cp -rf build/linux-x64/out/lt2http $HOME/.kodi/userdata/addon_data/service.lt2http/bin/linux-x64/
-fi
+for dir in ${KODI_BIN_DIRS}; do
+  mkdir -p "${dir}"
+  cp -f ${files} "${dir}/"
+done

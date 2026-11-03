@@ -1,0 +1,5 @@
+# Docker images only need the dependency scripts and the toolchain
+*
+!scripts/install_dependencies.sh
+!scripts/versions.env
+!cmake/toolchains/

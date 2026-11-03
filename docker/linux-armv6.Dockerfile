@@ -1,69 +1,35 @@
-FROM elementumorg/cross-compiler:musl
+# Build from the repository root: make env PLATFORM=linux-armv6
+# The armv6 toolchain of elementumorg/cross-compiler:linux-armv6 is GCC 4.8 (no C++14), so this image uses
+# a Bootlin toolchain instead: GCC 9.3, glibc 2.31 (as Raspberry Pi OS Bullseye) and an armv6 libstdc++.
+FROM elementumorg/cross-compiler:base
 
-RUN wget -q https://musl.cc/arm-linux-musleabihf-cross.tgz -O cross.tgz && \
-    tar -xzf cross.tgz -C /usr/ && \
-    rm cross.tgz
+ARG TOOLCHAIN=armv6-eabihf--glibc--stable-2020.08-1
+ARG TOOLCHAIN_SHA256=539e31b3bdcf76c3d6710951c74fbe682e2de8da4d110b981e9108b656890f4a
+RUN wget -qO /tmp/toolchain.tar.bz2 "https://toolchains.bootlin.com/downloads/releases/toolchains/armv6-eabihf/tarballs/${TOOLCHAIN}.tar.bz2" && \
+    echo "${TOOLCHAIN_SHA256}  /tmp/toolchain.tar.bz2" | sha256sum -c - && \
+    tar -xjf /tmp/toolchain.tar.bz2 -C /usr && \
+    mv "/usr/${TOOLCHAIN}" /usr/armv6-eabihf && \
+    /usr/armv6-eabihf/relocate-sdk.sh && \
+    rm /tmp/toolchain.tar.bz2
 
-ENV CROSS_TRIPLE arm-linux-musleabihf
-ENV CROSS_ROOT /usr/${CROSS_TRIPLE}-cross
-ENV PATH ${CROSS_ROOT}/bin:${PATH}
-ENV LD_LIBRARY_PATH ${CROSS_ROOT}/lib:${LD_LIBRARY_PATH}
-ENV PKG_CONFIG_PATH ${CROSS_ROOT}/lib/pkgconfig:${PKG_CONFIG_PATH}
-ENV USE_STATIC ON
+ENV CROSS_TRIPLE="arm-buildroot-linux-gnueabihf" \
+    CROSS_ROOT="/usr/armv6-eabihf" \
+    PATH="/usr/armv6-eabihf/bin:${PATH}" \
+    TARGET_SYSTEM="Linux" \
+    TARGET_PROCESSOR="arm" \
+    TARGET_CC="arm-buildroot-linux-gnueabihf-gcc" \
+    TARGET_CXX="arm-buildroot-linux-gnueabihf-g++" \
+    BOOST_CONFIG="using gcc : : arm-buildroot-linux-gnueabihf-g++ ;" \
+    BOOST_OPTS="target-os=linux" \
+    OPENSSL_OPTS="linux-armv4" \
+    CMAKE_TOOLCHAIN_FILE="/usr/share/lt2http/cross.cmake"
 
-RUN mkdir -p /build
-WORKDIR /build
+COPY cmake/toolchains/cross.cmake /usr/share/lt2http/
+COPY scripts/install_dependencies.sh scripts/versions.env /usr/share/lt2http/
 
-ARG BOOST_VERSION
-ARG BOOST_SHA256
-ARG OPENSSL_VERSION
-ARG OPENSSL_SHA256
-ARG SWIG_VERSION
-ARG SWIG_SHA256
-ARG LIBTORRENT_VERSION
-ARG OATPP_VERSION
-ARG OATPP_SWAGGER_VERSION
-ARG MIMALLOC_VERSION
-
-COPY deps /build/
-COPY common.sh /build/
-COPY toolchains /build/toolchains
-
-# Install Backtrace
-COPY build-backtrace.sh /build/
-ENV BT_CC ${CROSS_TRIPLE}-gcc
-ENV BT_CXX ${CROSS_TRIPLE}-g++
-RUN ./build-backtrace.sh
-
-# Install Boost.System
-COPY build-boost.sh /build/
-COPY boost-statx-disable.patch /build/
-ENV BOOST_CC gcc
-ENV BOOST_CXX g++
-ENV BOOST_OS linux
-ENV BOOST_TARGET_OS linux
-RUN ./build-boost.sh
-
-# Install OpenSSL
-COPY build-openssl.sh /build/
-ENV OPENSSL_OPTS linux-armv4
-RUN ./build-openssl.sh
-
-# Install Oatpp
-COPY build-oatpp.sh /build/
-ENV OATPP_CC ${CROSS_TRIPLE}-gcc
-ENV OATPP_CXX ${CROSS_TRIPLE}-g++
-RUN ./build-oatpp.sh
-
-# Install Mimalloc
-COPY build-mimalloc.sh /build/
-ENV MI_CC ${CROSS_TRIPLE}-gcc
-ENV MI_CXX ${CROSS_TRIPLE}-g++
-RUN ./build-mimalloc.sh
-
-# Install libtorrent
-COPY build-libtorrent.sh /build/
-ENV LT_CC ${CROSS_TRIPLE}-gcc
-ENV LT_CXX ${CROSS_TRIPLE}-g++
-ENV LT_CXXFLAGS -Wno-psabi
-RUN ./build-libtorrent.sh
+# One layer per dependency, so a failing step does not rebuild the ones before it
+RUN /usr/share/lt2http/install_dependencies.sh cmake backtrace
+RUN /usr/share/lt2http/install_dependencies.sh boost
+RUN /usr/share/lt2http/install_dependencies.sh openssl
+RUN /usr/share/lt2http/install_dependencies.sh oatpp oatpp-swagger
+RUN /usr/share/lt2http/install_dependencies.sh libtorrent
