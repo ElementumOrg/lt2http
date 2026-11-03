@@ -12,6 +12,7 @@
 - Fixed streaming that could send not yet downloaded data when a read covered more than one piece.
 - Fixed `/torrents/{infoHash}/generate` returning a truncated torrent file.
 - Fixed wrong `buffering_total` values in `/torrents/{infoHash}/files/{index}/status`.
+- Fixed wrong numbers in log messages and in the file priorities of `/info`, mostly on 32-bit devices.
 - Fixed possible crashes when torrents are added, removed or streamed at the same time (like removing a torrent that is still streaming), and when lt2http is stopped or started again.
 - Fixed a missing config file being silently ignored: lt2http now stops with an error unless `--update` is given.
 - Adding a torrent reports an error when the torrent file cannot be saved.
