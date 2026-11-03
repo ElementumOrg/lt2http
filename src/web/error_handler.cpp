@@ -9,9 +9,8 @@ ErrorHandler::ErrorHandler(const std::shared_ptr<oatpp::data::mapping::ObjectMap
 std::shared_ptr<ErrorHandler::OutgoingResponse>
 ErrorHandler::handleError(const Status& status, const oatpp::String& message, const Headers& headers) {
     OATPP_LOGE("ErrorHandler::handleError", "Sending error: %d, %s", status.code, message->c_str());
-    for (auto &h : headers.getAll()) {
-        OATPP_LOGE("ErrorHandler::handleError", "header %s=%s", h.first.std_str().c_str(), h.second.std_str().c_str());
-    }
+    for (const auto &[name, value] : headers.getAll())
+        OATPP_LOGE("ErrorHandler::handleError", "header %s=%s", name.std_str().c_str(), value.std_str().c_str());
 
     auto error = StatusDto::createShared();
     error->status = "ERROR";
@@ -20,9 +19,8 @@ ErrorHandler::handleError(const Status& status, const oatpp::String& message, co
 
     auto response = ResponseFactory::createResponse(status, error, m_objectMapper);
 
-    for(const auto& pair : headers.getAll()) {
-        response->putHeader(pair.first.toString(), pair.second.toString());
-    }
+    for (const auto &[name, value] : headers.getAll())
+        response->putHeader(name.toString(), value.toString());
 
     return response;
 }

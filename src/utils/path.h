@@ -15,14 +15,14 @@ inline bool file_exists(const std::string &name) {
     return boost::filesystem::exists(name, ec);
 }
 
-inline bool save_file(const std::string &filename, char const *data, std::size_t size) {
+[[nodiscard]] inline bool save_file(const std::string &filename, char const *data, std::size_t size) {
     std::ofstream f(filename, std::ios_base::trunc | std::ios_base::binary);
     f.write(data, std::streamsize(size));
     return !f.fail();
 }
 
 // Reads a whole file into a std::string or std::vector<char>, fails for files bigger than limit.
-template <typename Container> bool load_file(const std::string &filename, Container &v, std::int64_t limit = 8000000) {
+template <typename Container> [[nodiscard]] bool load_file(const std::string &filename, Container &v, std::int64_t limit = 8000000) {
     boost::system::error_code ec;
     auto size = boost::filesystem::file_size(filename, ec);
     if (ec || size > std::uintmax_t(limit))

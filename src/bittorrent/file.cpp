@@ -5,6 +5,7 @@
 #include <oatpp/core/Types.hpp>
 
 #include <memory>
+#include <tuple>
 #include <utility>
 
 #include <app/application.h>
@@ -26,10 +27,7 @@ File::File(Torrent* torrent, lt::file_index_t index, std::string file_path, std:
     m_start_buffer_size = std::int64_t(config.buffer_size) * 1024 * 1024;
     m_end_buffer_size = std::int64_t(config.end_buffer_size) * 1024 * 1024;
 
-    auto region = region_pieces(m_offset, m_size, m_torrent->piece_length(), m_torrent->pieces_count());
-
-    m_piece_start = region.first;
-    m_piece_end = region.second;
+    std::tie(m_piece_start, m_piece_end) = region_pieces(m_offset, m_size, m_torrent->piece_length(), m_torrent->pieces_count());
 }
 
 File::~File() = default;
@@ -70,8 +68,8 @@ void File::add_buffer_piece(int piece) {
 }
 
 void File::add_buffer_region(std::int64_t offset, std::int64_t size) {
-    auto range = region_pieces(offset, size, m_torrent->piece_length(), m_torrent->pieces_count());
-    for (int i = int(range.first); i <= int(range.second); i++)
+    auto [first, last] = region_pieces(offset, size, m_torrent->piece_length(), m_torrent->pieces_count());
+    for (int i = int(first); i <= int(last); i++)
         add_buffer_piece(i);
 }
 

@@ -61,7 +61,7 @@ $ make local       # builds build/cmake/local/lt2http with the host compiler
 
 Build lt2http
 ----------
-`lt2http` is built with CMake (C++14). Options (`-D<option>=ON|OFF`):
+`lt2http` is built with CMake (C++17). Options (`-D<option>=ON|OFF`):
 - `build_library` - build the `lt2http.so` / `lt2http.dll` shared library instead of the binary (default: OFF)
 - `static_runtime` - link the C++ runtime statically (default: ON)
 - `enable_sanitizers` - build with address, leak and undefined behavior sanitizers (default: OFF)
@@ -90,7 +90,7 @@ $ make linux-x64                 # binary into build/linux-x64/
 $ make linux-x64-shared          # shared library into build/linux-x64/
 $ make all                       # everything, JOBS=4 platforms in parallel
 ```
-`linux-armv6` uses a Bootlin toolchain (GCC 9.3, glibc 2.31) instead of the cross-compiler image one, which is too old for C++14.
+`linux-armv6` uses a Bootlin toolchain (GCC 9.3, glibc 2.31) instead of the cross-compiler image one, which is too old for C++17.
 
 See `make help` for all targets.
 

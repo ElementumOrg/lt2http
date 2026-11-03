@@ -46,12 +46,12 @@ Torrent::~Torrent() { OATPP_LOGI("Torrent", "Destroying: %s", hash().c_str()); }
 lt::torrent_status &Torrent::status() { return m_nativeStatus; }
 
 std::vector<std::shared_ptr<File>> Torrent::files() const {
-    std::lock_guard<std::mutex> guard(m_filesMutex);
+    std::scoped_lock guard(m_filesMutex);
     return m_files;
 }
 
 std::shared_ptr<File> Torrent::get_file(int index) {
-    std::lock_guard<std::mutex> guard(m_filesMutex);
+    std::scoped_lock guard(m_filesMutex);
     auto match =
         std::find_if(m_files.begin(), m_files.end(), [&index](const std::shared_ptr<File> &t) { return t->index() == index; });
     if (match == m_files.end())
@@ -146,7 +146,7 @@ void Torrent::on_metadata_received() {
                                                       storage.file_size(i), storage.file_offset(i), file_priority(i)));
     }
 
-    std::lock_guard<std::mutex> guard(m_filesMutex);
+    std::scoped_lock guard(m_filesMutex);
     m_files = std::move(files);
 }
 
@@ -480,7 +480,7 @@ lt::download_priority_t Torrent::piece_priority(lt::piece_index_t index) const {
 
 void Torrent::piece_priority(lt::piece_index_t index, lt::download_priority_t priority) {
     OATPP_LOGI("Torrent::piece_priority", "Setting priority '%d' for piece '%d'", priority, index);
-    m_nativeHandle.piece_priority(index, std::min(std::max(priority, lt::dont_download), lt::top_priority));
+    m_nativeHandle.piece_priority(index, std::clamp(priority, lt::dont_download, lt::top_priority));
 }
 
 void Torrent::set_piece_deadline(lt::piece_index_t index, int deadline) {
@@ -542,7 +542,8 @@ void Torrent::handle_save_resume_data_alert(const lt::save_resume_data_alert *p)
     OATPP_LOGI("Torrent::handle_save_resume_data_alert", "Saving resume data to: %s", m_resumeFile.c_str());
 
     auto const b = lt::write_resume_data_buf(p->params);
-    save_file(m_resumeFile, b.data(), b.size());
+    if (!save_file(m_resumeFile, b.data(), b.size()))
+        OATPP_LOGE("Torrent::handle_save_resume_data_alert", "Could not save resume data to: %s", m_resumeFile.c_str());
 }
 
 void Torrent::handle_dht_reply_alert(const lt::dht_reply_alert *p) { 
@@ -677,12 +678,8 @@ void Torrent::dump(std::stringstream &ss) {
                 message = endpoint.message;
         }
 
-        if (scrape_incomplete == -1) {
-            auto it = m_trackerInfos.find(tracker.url);
-            if (it != m_trackerInfos.end()) {
-                scrape_incomplete = it->second.numPeers;
-            }
-        }
+        if (auto info = m_trackerInfos.find(tracker.url); scrape_incomplete == -1 && info != m_trackerInfos.end())
+            scrape_incomplete = info->second.numPeers;
 
         trackers.emplace(tracker.url, Fmt("        %-60s: %-3s seeds, %-3s peers, updating: %-5s, is_working: %-5s, message: %s\n", tracker.url.c_str(),
                    peer_num_to_string(scrape_complete).c_str(), peer_num_to_string(scrape_incomplete).c_str(),
@@ -690,11 +687,10 @@ void Torrent::dump(std::stringstream &ss) {
     }
 
     // List trackers information sorted by tracker url.
-    for (const auto &tracker : trackers)
-        ss << tracker.second;
+    for (const auto &[url, line] : trackers)
+        ss << line;
 
-    auto dht = m_trackerInfos.find("DHT");
-    if (dht != m_trackerInfos.end()) {
+    if (auto dht = m_trackerInfos.find("DHT"); dht != m_trackerInfos.end()) {
         auto const &entry = dht->second;
         ss << Fmt("        %-60s: %-3s seeds, %-3s peers, updating: %-5s, is_working: %-5s, message: %s\n", "DHT", "-",
                   peer_num_to_string(entry.numPeers).c_str(), "false", "true", entry.lastMessage.c_str());
@@ -706,9 +702,9 @@ void Torrent::dump(std::stringstream &ss) {
 
     std::vector<int> reader_positions;
     {
-        std::lock_guard<std::mutex> guard(m_readersMutex);
-        for (const auto &reader : m_readers)
-            reader_positions.push_back(reader.second->piece_start());
+        std::scoped_lock guard(m_readersMutex);
+        for (const auto &[id, reader] : m_readers)
+            reader_positions.push_back(reader->piece_start());
     }
 
     int total_prioritized = 0;
@@ -763,7 +759,8 @@ void Torrent::save_torrent_file() const {
     OATPP_LOGI("Torrent::save_torrent_file", "Saving torrent file to: %s", m_torrentFile.c_str());
 
     auto data = generate();
-    save_file(m_torrentFile, data.data(), data.size());
+    if (!save_file(m_torrentFile, data.data(), data.size()))
+        OATPP_LOGE("Torrent::save_torrent_file", "Could not save torrent file to: %s", m_torrentFile.c_str());
 }
 
 std::vector<char> Torrent::generate() const {
@@ -800,23 +797,23 @@ int Torrent::readahead_pieces() const {
 }
 
 bool Torrent::has_readers() const {
-    std::lock_guard<std::mutex> guard(m_readersMutex);
+    std::scoped_lock guard(m_readersMutex);
     return !m_readers.empty();
 }
 
 void Torrent::register_reader(Reader *reader) {
-    std::lock_guard<std::mutex> guard(m_readersMutex);
+    std::scoped_lock guard(m_readersMutex);
     m_readers[reader->id()] = reader;
 }
 
 void Torrent::unregister_reader(std::int64_t id) {
-    std::lock_guard<std::mutex> guard(m_readersMutex);
+    std::scoped_lock guard(m_readersMutex);
     m_readers.erase(id);
 }
 
 void Torrent::prioritize() {
     // Held for the whole run: readers unregister in their destructor, so the pointers stay valid while locked.
-    std::lock_guard<std::mutex> guard(m_readersMutex);
+    std::scoped_lock guard(m_readersMutex);
 
     int pieces_limit = readahead_pieces();
     int iter_count = -1;
@@ -826,13 +823,13 @@ void Torrent::prioritize() {
 
     while (readers_finished < m_readers.size() && pieces_limit > 0) {
         iter_count++;
-        for (const auto &p : m_readers) {
-            int index = p.second->piece_start() + iter_count;
-            if (iterated[p.first]) {
+        for (const auto &[id, reader] : m_readers) {
+            int index = reader->piece_start() + iter_count;
+            if (iterated[id]) {
                 continue;
             }
-            if (p.second->is_closing() || index > p.second->piece_end_limit()) {
-                iterated[p.first] = true;
+            if (reader->is_closing() || index > reader->piece_end_limit()) {
+                iterated[id] = true;
                 readers_finished++;
                 continue;
             }

@@ -48,7 +48,7 @@ function download() {
 }
 
 function build_cmake() {
-  cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_STANDARD=14 -DBUILD_SHARED_LIBS=OFF \
+  cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_STANDARD=17 -DBUILD_SHARED_LIBS=OFF \
     -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_INSTALL_PREFIX="${PREFIX}" -DCMAKE_PREFIX_PATH="${PREFIX}" \
     ${CMAKE_TOOLCHAIN_FILE:+"-DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}"} "$@"
   cmake --build build -j"${jobs}"
@@ -83,7 +83,7 @@ for dep in "${deps[@]}"; do
     PATH="${tmp_dir}/bin:${PATH}" ./b2 -j"${jobs}" --user-config=user-config.jam --prefix="${PREFIX}" \
       toolset="$(echo "${BOOST_CONFIG}" | awk '{print $2}')" \
       --with-system --with-program_options --with-filesystem --with-date_time --with-chrono --with-random \
-      link=static variant=release threading=multi cxxflags="-std=c++14 -fPIC" cflags=-fPIC \
+      link=static variant=release threading=multi cxxflags="-std=c++17 -fPIC" cflags=-fPIC \
       define=BOOST_FILESYSTEM_DISABLE_STATX ${TARGET_FLAGS:+cxxflags="${TARGET_FLAGS}" cflags="${TARGET_FLAGS}"} ${BOOST_OPTS} install
     ;;
   openssl)

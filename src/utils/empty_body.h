@@ -3,7 +3,7 @@
 #include "oatpp/web/protocol/http/outgoing/Body.hpp"
 #include "oatpp/web/protocol/http/Http.hpp"
 
-namespace oatpp { namespace web { namespace protocol { namespace http { namespace outgoing {
+namespace oatpp::web::protocol::http::outgoing {
 
 class EmptyBody : public Body {
 private:
@@ -21,4 +21,4 @@ public:
   
 };
   
-}}}}}
+}

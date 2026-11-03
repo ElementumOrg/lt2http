@@ -62,7 +62,7 @@ void memory_storage::set_memory_size(std::int64_t s) {
     if (s <= capacity)
         return;
 
-    std::lock_guard<std::mutex> guard(m_mutex);
+    std::scoped_lock guard(m_mutex);
 
     capacity = s;
 
@@ -213,11 +213,11 @@ bool memory_storage::get_buffer(memory_piece *p, bool is_write) {
     if (!is_write) {
         // Trying to lock and get to make sure we are not affected
         // by write/read at the same time.
-        std::lock_guard<std::mutex> guard(m_mutex);
+        std::scoped_lock guard(m_mutex);
         return p->is_buffered();
     }
 
-    std::lock_guard<std::mutex> guard(m_mutex);
+    std::scoped_lock guard(m_mutex);
 
     // Once again checking in case we had multiple writes in parallel
     if (p->is_buffered())
@@ -257,7 +257,7 @@ void memory_storage::trim(int pi) {
         return;
     }
 
-    std::lock_guard<std::mutex> guard(m_mutex);
+    std::scoped_lock guard(m_mutex);
 
     while (buffer_used >= buffer_limit) {
         if (is_logging) {
@@ -303,7 +303,7 @@ std::string memory_storage::get_buffer_info() {
 int memory_storage::find_last_buffer(int pi, bool check_read) {
     int bi = -1;
     std::chrono::time_point<std::chrono::system_clock> minTime = std::chrono::system_clock::now();
-    std::lock_guard<std::mutex> guard(r_mutex);
+    std::scoped_lock guard(r_mutex);
 
     for (auto &buffer : buffers) {
         if (buffer.is_used && buffer.is_assigned() && !is_reserved(buffer.pi) && buffer.pi != pi &&
@@ -349,7 +349,7 @@ void memory_storage::update_reader_pieces(const std::vector<int>& pieces) {
     if (!is_initialized)
         return;
 
-    std::lock_guard<std::mutex> guard(r_mutex);
+    std::scoped_lock guard(r_mutex);
     reader_pieces.reset();
     for (int piece : pieces) {
         reader_pieces.set(piece);
@@ -360,7 +360,7 @@ void memory_storage::update_reserved_pieces(const std::vector<int>& pieces) {
     if (!is_initialized)
         return;
 
-    std::lock_guard<std::mutex> guard(r_mutex);
+    std::scoped_lock guard(r_mutex);
     buffer_reserved = 0;
     reserved_pieces.reset();
     for (int piece : pieces) {

@@ -18,9 +18,6 @@
 
 namespace lh {
 
-// Static
-Application* Application::_inst = nullptr;
-
 Application::Application(int &argc, char *argv[])
     : m_config(argc, argv)
     , m_session(m_config) {}

@@ -54,7 +54,9 @@ public:
     lh::Config& config();
     lh::Session& session();
 
-    static Application* _inst;
+    // Not a unique_ptr: reset() clears it before the destructor runs, while threads
+    // stopped in ~Session still reach the application through it.
+    static inline Application *_inst = nullptr;
 
 private:
     lh::Config m_config;

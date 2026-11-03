@@ -31,15 +31,6 @@ void set_enum(const po::variables_map &vm, const char *name, const std::string &
 
 } // namespace
 
-std::int64_t memory_size = 0;
-
-std::string web_interface;
-std::string web_login;
-std::string web_password;
-int web_port = 0;
-
-std::atomic<bool> is_closing(false);
-
 
 Config::Config(int &argc, char *argv[]) {
     // Global options that influence configuration processing

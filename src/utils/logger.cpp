@@ -17,7 +17,7 @@ struct tm *localtime_r(time_t *_clock, struct tm *_result) {
 void CustomLogger::log(v_uint32 priority, const std::string &tag, const std::string &message) {
     auto time = std::chrono::system_clock::now().time_since_epoch();
 
-    std::lock_guard<std::mutex> lock(m_lock);
+    std::scoped_lock lock(m_lock);
 
     m_out << "[";
 

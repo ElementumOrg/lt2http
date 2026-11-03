@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <type_traits>
 
 #include <boost/algorithm/string.hpp>
 
@@ -82,22 +83,19 @@ class Controller : public oatpp::web::server::api::ApiController {
         return createDtoResponse(Status::CODE_200, dto);
     }
 
-    // Runs action(), errors are reported as Dto with an error field (and success = false, except ErrorDto).
+    // Runs action(), errors are reported as Dto with an error field and success = false (ErrorDto has no success field).
     template <typename Dto, typename F> Response operation(const char *tag, F &&action) {
         try {
             return action();
         } catch (const std::exception &e) {
             OATPP_LOGE(tag, "Error: %s", e.what())
             auto dto = Dto::createShared();
-            set_failed(dto.get());
+            if constexpr (!std::is_same_v<Dto, ErrorDto>)
+                dto->success = false;
             dto->error = e.what();
             return createDtoResponse(Status::CODE_500, dto);
         }
     }
-
-  private:
-    template <typename D> static void set_failed(D *dto) { dto->success = false; }
-    static void set_failed(ErrorDto *) {}
 };
 
 } // namespace lh

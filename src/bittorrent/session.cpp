@@ -109,7 +109,7 @@ void Session::start_thread(const char *name, std::function<void()> fn) {
 }
 
 bool Session::wait_for_abort(std::chrono::milliseconds timeout) {
-    std::unique_lock<std::mutex> lock(m_cvMutex);
+    std::unique_lock lock(m_cvMutex);
     return m_cv.wait_for(lock, timeout, [this] { return is_closing(); });
 }
 
@@ -121,12 +121,12 @@ void Session::run() {
 }
 
 void Session::check_directories() {
-    for (const auto &dir : {std::make_pair("torrents_path", &m_config.torrents_path), std::make_pair("download_path", &m_config.download_path)}) {
-        if (dir.second->empty())
-            throw lh::Exception(Fmt("Cannot start without %s setting", dir.first));
+    for (auto [name, path] : {std::pair{"torrents_path", &m_config.torrents_path}, std::pair{"download_path", &m_config.download_path}}) {
+        if (path->empty())
+            throw lh::Exception(Fmt("Cannot start without %s setting", name));
 
-        if (auto ec = mkpath(*dir.second)) {
-            OATPP_LOGI("Session::configure", "Failed to create %s directory at %s: %s", dir.first, dir.second->c_str(), ec.message().c_str());
+        if (auto ec = mkpath(*path)) {
+            OATPP_LOGI("Session::configure", "Failed to create %s directory at %s: %s", name, path->c_str(), ec.message().c_str());
             throw lh::Exception(ec.message());
         }
     }
@@ -438,9 +438,9 @@ void Session::start_services() {
 
     m_nativeSession->apply_settings(m_pack);
 
-    for (const auto &p : m_mapped_ports) {
-        OATPP_LOGI("Session::start_services", "Adding port mapping: %d", p.first);
-        m_mapped_ports[p.first] = m_nativeSession->add_port_mapping(lt::session::tcp, p.first, p.first);
+    for (auto &[port, mappings] : m_mapped_ports) {
+        OATPP_LOGI("Session::start_services", "Adding port mapping: %d", port);
+        mappings = m_nativeSession->add_port_mapping(lt::session::tcp, port, port);
     }
 }
 
@@ -463,11 +463,10 @@ void Session::stop_services() {
         m_pack.set_bool(lt::settings_pack::enable_natpmp, false);
     }
 
-    for (const auto &p : m_mapped_ports) {
-        OATPP_LOGI("Session::stop_services", "Deleting port mapping for post: %d", p.first);
-        for (auto i : p.second) {
-            m_nativeSession->delete_port_mapping(i);
-        }
+    for (const auto &[port, mappings] : m_mapped_ports) {
+        OATPP_LOGI("Session::stop_services", "Deleting port mapping for port: %d", port);
+        for (auto mapping : mappings)
+            m_nativeSession->delete_port_mapping(mapping);
     }
     m_mapped_ports.clear();
 
@@ -580,7 +579,7 @@ void Session::load_previous_torrents() {
         return;
 
     {
-        std::lock_guard<std::mutex> guard(m_torrentsMutex);
+        std::scoped_lock guard(m_torrentsMutex);
         m_torrents.clear();
     }
 
@@ -593,8 +592,8 @@ void Session::load_previous_torrents() {
         return;
     }
 
-    for (auto &p : entries) {
-        std::string path = p.second.string();
+    for (const auto &[modified, file] : entries) {
+        std::string path = file.string();
         try {
             add_torrent(
                 path, 
@@ -617,7 +616,7 @@ void Session::load_trackers() {
     OATPP_LOGD("Session::load_trackers", "Loading trackers with selection: %s", lh::extra_trackers_to_string(m_config.add_extra_trackers))
     std::vector<std::string> trackers = defaultTrackers;
     auto use_trackers = [&] {
-        std::lock_guard<std::mutex> guard(m_extraTrackersMutex);
+        std::scoped_lock guard(m_extraTrackersMutex);
         m_extraTrackers = std::move(trackers);
         OATPP_LOGD("Session::load_trackers", "Using %d extra trackers", int(m_extraTrackers.size()));
     };
@@ -760,7 +759,7 @@ std::shared_ptr<Torrent> Session::add_torrent(std::string uri, bool is_paused, l
             p.trackers.clear();
         
         // Add trackers to torrent info
-        std::lock_guard<std::mutex> guard(m_extraTrackersMutex);
+        std::scoped_lock guard(m_extraTrackersMutex);
         for (const auto &tracker : m_extraTrackers) {
             if (std::find(p.trackers.begin(), p.trackers.end(), tracker) == p.trackers.end())
                 p.trackers.push_back(tracker);
@@ -785,7 +784,7 @@ std::shared_ptr<Torrent> Session::add_torrent(std::string uri, bool is_paused, l
     auto torrent = std::make_shared<Torrent>(m_nativeSession, th, st, added_time);
 
     {
-        std::lock_guard<std::mutex> guard(m_torrentsMutex);
+        std::scoped_lock guard(m_torrentsMutex);
         m_torrents.emplace_back(torrent);
     }
 
@@ -798,12 +797,12 @@ std::shared_ptr<Torrent> Session::add_torrent(std::string uri, bool is_paused, l
 }
 
 std::vector<std::shared_ptr<Torrent>> Session::torrents() {
-    std::lock_guard<std::mutex> guard(m_torrentsMutex);
+    std::scoped_lock guard(m_torrentsMutex);
     return m_torrents;
 }
 
 std::shared_ptr<Torrent> Session::find_torrent(const std::string &hash) const {
-    std::lock_guard<std::mutex> guard(m_torrentsMutex);
+    std::scoped_lock guard(m_torrentsMutex);
 
     auto match =
         std::find_if(m_torrents.begin(), m_torrents.end(), [&hash](const std::shared_ptr<Torrent> &t) { return t->hash() == hash; });
@@ -826,7 +825,7 @@ bool Session::remove_torrent(const std::string &hash, bool is_delete_files, bool
 
     OATPP_LOGI("Session::remove_torrent", "Removed torrent with hash: %s", torrent->hash().c_str());
 
-    std::lock_guard<std::mutex> guard(m_torrentsMutex);
+    std::scoped_lock guard(m_torrentsMutex);
     m_torrents.erase(std::remove(m_torrents.begin(), m_torrents.end(), torrent), m_torrents.end());
 
     return true;

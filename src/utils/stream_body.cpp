@@ -1,6 +1,6 @@
 #include "stream_body.h"
 
-namespace oatpp { namespace web { namespace protocol { namespace http { namespace outgoing {
+namespace oatpp::web::protocol::http::outgoing {
 
 StreamBody::StreamBody(const std::shared_ptr<data::stream::ReadCallback>& readCallback, const std::int64_t sz)
   : m_readCallback(readCallback),
@@ -11,8 +11,7 @@ v_io_size StreamBody::read(void *buffer, v_buff_size count, async::Action& actio
   return m_readCallback->read(buffer, count, action);
 }
 
-void StreamBody::declareHeaders(Headers& headers) {
-  (void) headers;
+void StreamBody::declareHeaders([[maybe_unused]] Headers &headers) {
   // DO NOTHING
 }
 
@@ -25,4 +24,4 @@ v_int64 StreamBody::getKnownSize() {
   return m_size;
 }
 
-}}}}}
+}

@@ -2,7 +2,7 @@
 
 #include "oatpp/web/protocol/http/outgoing/Body.hpp"
 
-namespace oatpp { namespace web { namespace protocol { namespace http { namespace outgoing {
+namespace oatpp::web::protocol::http::outgoing {
 
 class StreamBody : public Body {
 private:
@@ -22,4 +22,4 @@ public:
 
 };
 
-}}}}}
+}

@@ -27,10 +27,8 @@ class StreamController : public lh::Controller {
     Response streamFile(const oatpp::String &hash_param, const oatpp::String &index_param,
                         const std::shared_ptr<IncomingRequest> &request) {
         OATPP_LOGD("StreamController::stream", "Request Header: Method = %s", request->getStartingLine().method.toString()->c_str())
-        for (const auto &header : request->getHeaders().getAll()) {
-            OATPP_LOGD("StreamController::stream", "Request Header: %s = %s", header.first.std_str().c_str(),
-                       header.second.std_str().c_str())
-        }
+        for (const auto &[name, value] : request->getHeaders().getAll())
+            OATPP_LOGD("StreamController::stream", "Request Header: %s = %s", name.std_str().c_str(), value.std_str().c_str())
 
         return fileOperation("StreamController::stream", hash_param, index_param, [&](const std::string &hash, int index) {
             auto torrent = lh::session().get_torrent(hash);
@@ -79,10 +77,8 @@ class StreamController : public lh::Controller {
             if (!mimeType.empty())
                 response->putHeader(Header::CONTENT_TYPE, mimeType);
 
-            for (const auto &header : response->getHeaders().getAll()) {
-                OATPP_LOGD("StreamController::stream", "Response Header: %s = %s", header.first.std_str().c_str(),
-                           header.second.std_str().c_str())
-            }
+            for (const auto &[name, value] : response->getHeaders().getAll())
+                OATPP_LOGD("StreamController::stream", "Response Header: %s = %s", name.std_str().c_str(), value.std_str().c_str())
 
             return response;
         });

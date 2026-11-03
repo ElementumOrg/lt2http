@@ -151,7 +151,8 @@ class SessionController : public lh::Controller {
             auto uri = temporary_torrent_path();
 
             OATPP_LOGI("SessionController::add_file", "Saving uploaded file to: %s", uri.c_str())
-            save_file(uri, data->c_str(), data->size());
+            if (!save_file(uri, data->c_str(), data->size()))
+                throw lh::Exception("Could not save uploaded file to: " + uri);
 
             return torrentAdded(lh::session().add_torrent(uri, false, storage, true, std::chrono::system_clock::now()));
         });
@@ -190,7 +191,8 @@ class SessionController : public lh::Controller {
                 uri = temporary_torrent_path();
 
                 OATPP_LOGI("SessionController::add_uri", "Saving downloaded file to: %s", uri.c_str())
-                save_file(uri, res->body.c_str(), res->body.size());
+                if (!save_file(uri, res->body.c_str(), res->body.size()))
+                    throw lh::Exception("Could not save downloaded file to: " + uri);
             }
 
             return torrentAdded(lh::session().add_torrent(uri, false, storage, true, std::chrono::system_clock::now()));

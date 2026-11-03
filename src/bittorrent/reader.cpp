@@ -45,10 +45,8 @@ bool Reader::is_closing() const {
     return m_isClosing;
 }
 
-oatpp::v_io_size Reader::read(void *buffer, v_buff_size bufferSize, oatpp::async::Action &action) {
-    std::lock_guard<std::mutex> g(m_lock);
-
-    (void)action;
+oatpp::v_io_size Reader::read(void *buffer, v_buff_size bufferSize, [[maybe_unused]] oatpp::async::Action &action) {
+    std::scoped_lock g(m_lock);
 
     // The range end is inclusive, never read past it.
     if (m_position > m_range.end)
