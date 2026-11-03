@@ -8,15 +8,15 @@ case "$1" in
 local)
   # Native build, needs dependencies from 'make local-env'
   make local
-  files=build/cmake/local/lt2http
+  files=(build/cmake/local/lt2http)
   ;;
 sanitize)
   make local BUILD_TYPE=RelWithDebInfo CMAKE_FLAGS=-Denable_sanitizers=ON
-  files=build/cmake/local/lt2http
+  files=(build/cmake/local/lt2http)
   ;;
 docker)
   make linux-x64 linux-x64-shared
-  files="build/linux-x64/lt2http build/linux-x64/lt2http.so"
+  files=(build/linux-x64/lt2http build/linux-x64/lt2http.so)
   ;;
 *)
   echo "Usage: $0 local|sanitize|docker"
@@ -26,5 +26,5 @@ esac
 
 for dir in ${KODI_BIN_DIRS}; do
   mkdir -p "${dir}"
-  cp -f ${files} "${dir}/"
+  cp -f "${files[@]}" "${dir}/"
 done

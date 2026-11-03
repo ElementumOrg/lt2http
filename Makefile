@@ -135,7 +135,7 @@ SHELL_FILES = $(shell $(GIT) ls-files '*.sh' ':!:src/external')
 
 lint:
 	$(CLANG_FORMAT) --style=file --dry-run --Werror $(FORMAT_FILES)
-	shellcheck $(SHELL_FILES)
+	shellcheck --external-sources --source-path=SCRIPTDIR $(SHELL_FILES)
 
 format:
 	$(CLANG_FORMAT) --style=file -i $(FORMAT_FILES)
