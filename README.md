@@ -1,18 +1,32 @@
-lt2http 
-======
+lt2http
+=======
 
 What it is
 ----------
+lt2http is a libtorrent-to-HTTP application: a web server with a JSON API that uses [libtorrent](https://github.com/arvidn/libtorrent)
+to download and manage torrents, streams downloaded files over HTTP and can download to memory, without using the disk.
 
-lt2http is a libtorrent-to-http application.
+It runs on port `65225` by default (`http://localhost:65225`), with Swagger documentation of the API at `http://localhost:65225/swagger/ui`.
+In Kodi it is started by the [service.lt2http](https://github.com/ElementumOrg/service.lt2http) add-on, as a binary or as a shared library.
 
-It is a web-server, responding with json, which uses libtorrent torrent library inside, to download and manage torrents, and can stream downloaded files via http and download files to memory (without using hard disks).
+Running
+-------
+```
+$ lt2http --config=lt2http.json     # settings from a JSON file
+$ lt2http --web_port=65226          # every setting is also a command line option
+$ lt2http --help                    # all options
+$ lt2http --write=lt2http.json      # writes the current settings to a file and exits
+```
+`--config` with `--update` creates or updates the file with all settings. Torrent and resume files are kept in `torrents_path` (default: the current folder).
+Requests from `127.0.0.1` never need authentication, others do when `web_login` or `web_password` is set.
 
-It has built-in Swagger.
-
-By default, runs on port `65225`, so application can be accessed on `http://localhost:65225`.
-
-Swagger is accessible on `http://localhost:65225/swagger/ui`
+Main API endpoints (see Swagger for all of them and their parameters):
+- `/status`, `/info`, `/pause`, `/resume` - session state and control
+- `/service/add/uri`, `/service/add/file` - add a torrent by magnet, URL, local path or uploaded file
+- `/torrents`, `/torrents/{infoHash}/...` - list, inspect, pause, resume and remove torrents and their files
+- `/torrents/{infoHash}/files/{index}/stream/{file_name}` - stream a file, with range requests
+- `/settings/get`, `/settings/set` - read and change settings at runtime
+- `/shutdown` - stop gracefully (exit code 0)
 
 Checkout
 ----------
@@ -24,81 +38,85 @@ $ git clone --recursive https://github.com/ElementumOrg/lt2http.git
 
 Submodules
 ----------
-`lt2http` uses several external projects (header-only), so you need to download them first, if needed (if you did not clone repository with a `--recursive` key)
+`lt2http` uses two header-only projects as submodules (cpp-httplib, json_struct), so you need to download them first, if you did not clone repository with a `--recursive` key:
 
 ```
-$ git submodule update --init --recursive --remote --no-fetch --depth=1
+$ git submodule update --init --recursive
 ```
 
 Dependencies
 ----------
-`lt2http` has these dependencies:
-- Boost (at least version 1.66.0)
-- OpenSSL (at least version 1.1.1)
-- Libtorrent (at least version 1.2.1)
-- Oatpp (at least version 1.2.5)
-- Oatpp-swagger (at least version 1.2.5)
-- MiMalloc (at least version 2.0.0)
-- Libbacktrace (latest master)
+Versions are pinned in `scripts/versions.env`:
+- Boost 1.86 (libtorrent 1.2 needs the asio API removed in Boost 1.87)
+- OpenSSL 1.1.1
+- Libtorrent 1.2 (lt2http uses its storage interface)
+- Oatpp and Oatpp-swagger 1.3
+- Libbacktrace (optional, for stack traces)
 
-Build dependencies
-----------
-You can look at build commands at `scripts/build-local.sh` script.
-
-By default everything is built with `Release` profile, meaning all the default optimizations and lack of debug symbols.
-
-Default installation directory: `./local-env/`.
-
-To use custom directory run:
+`scripts/install_dependencies.sh` builds all of them as static libraries. It is used by the Docker images, and for a native build:
 ```
-sudo CROSS_ROOT=/usr/ CROSS_TRIPLE=x86_64-linux-gnu ./scripts/build-local.sh
+$ make local-env   # installs dependencies into ./local-env
+$ make local       # builds build/cmake/local/lt2http with the host compiler
 ```
-
-Some notes regarding dependencies and `build-local.sh`:
-- We force use of gcc-6, because cross-build docker image has gcc-6 (for non-Android targets). That is because building on a newer OS will require newer libc, so users with old Kernels will not be able to run it. You can use any compiler.
-- All dependencies are compiled as static libraries to avoid having library dependencies in a `lt2http` binary.
-- We force use of `C++17` to have same standard for all dependencies.
-- `Oatpp` is compiled always in a `Release` profile, because we usually do not need to debug it.
-- Boost installation makes a file `~/user-config.jam`, so if you don't want it to be overwritten - comment that in `build.sh`.
-- MiMalloc is not used by default.
 
 Build lt2http
 ----------
-`lt2http` notes:
-- Libtorrent RC1_2 is used.
-- `C++17` is required from the compiler.
-- `Cmake` requires minimum version of `3.15.0`.
-- If you use profile `RelWithDebInfo` - Cmake will enable sanitizers for the binary: `-fsanitize=leak -fsanitize=undefined -fsanitize=bounds -fsanitize=bounds-strict`
-- If you use profile `Debug` or `RelWithDebInfo` Cmake will add debug symbols in the binary, useful to find cause of a segmentation fault or some error.
+`lt2http` is built with CMake (C++14). Options (`-D<option>=ON|OFF`):
+- `build_library` - build the `lt2http.so` / `lt2http.dll` shared library instead of the binary (default: OFF)
+- `static_runtime` - link the C++ runtime statically (default: ON)
+- `enable_sanitizers` - build with address, leak and undefined behavior sanitizers (default: OFF)
 
-Build locally process:
+Shared library
+----------
+The shared library exports a single function, used by the Kodi add-on through ctypes:
+```c
+int startWithLogAndArgs(const char *log_path, const char *args); // args: --config="/path/to/lt2http.json"
 ```
-$ mkdir -p build && cd build
-$ cmake -DCMAKE_BUILD_TYPE=Release .. && make -j$(nproc)
-```
+- It blocks until lt2http stops (call it from a thread) and returns 0 after `/shutdown`, 1 on failure (for example a missing config file).
+- `args` is a command line, split like the platform shell does, so quote paths with spaces. Log lines are appended to `log_path`.
+- It can be called again in the same process after it returned: the library cannot be unloaded, so it is reused on restarts.
+  Only one instance can run at a time.
+- It installs no signal handlers and never exits the process. All other symbols are hidden, so it can be loaded next to Elementum.
+- On Windows file names are narrow (ANSI) strings: the add-on passes short (8.3) paths to support non-ASCII user folders.
 
-Build using Docker:
-There is a simple way, pull docker image and compile lt12http there.
+Build using Docker
+----------
+Every platform has a Docker image with all dependencies, `elementumorg/lt2http:<platform>`, built from `docker/<platform>.Dockerfile`.
+Platforms are the same as for Elementum: `android-arm`, `android-arm64`, `android-x64`, `android-x86`, `linux-armv6`, `linux-armv7`,
+`linux-armv7_softfp`, `linux-arm64`, `linux-x64`, `linux-x86`, `windows-x64`, `windows-x86`, `darwin-x64`, `darwin-arm64`.
 ```
-$ make pull PLATFORM=linux-x64 # Pull Docker image for platform linux-x64 from Docker Hub
-$ make linux-x64 # Run in linux-x64 Docker image
+$ make pull PLATFORM=linux-x64   # or build the image locally: make env PLATFORM=linux-x64
+$ make linux-x64                 # binary into build/linux-x64/
+$ make linux-x64-shared          # shared library into build/linux-x64/
+$ make all                       # everything, JOBS=4 platforms in parallel
 ```
+`linux-armv6` uses a Bootlin toolchain (GCC 9.3, glibc 2.31) instead of the cross-compiler image one, which is too old for C++14.
+
+See `make help` for all targets.
 
 Build process helper:
 ----------
 
-For easy of building there is `test_build.sh` with 3 options:
+For easy of building there is `test_build.sh` with 3 options, it copies the result into the local Kodi installation:
 ```
 test_build.sh local # Run compilation on a local system, without Docker
-test_build.sh sanitize # Run compilation with CMake build type RelWithDebInfo, which includes sanitizers.
+test_build.sh sanitize # Run compilation with sanitizers and debug information.
 test_build.sh docker # Run compilation in a Docker.
 ```
 
+Build troubleshooting
+----------
+- A compiler killed by the system (`Killed signal terminated program cc1plus`) is out of memory: lower `JOBS` or `BUILD_JOBS`.
+- CMake keeps the toolchain flags of the first configure: after changing an image, remove `build/cmake/<platform>` (or `make clean`).
+- Dependency limits: libtorrent 1.2 needs Boost < 1.87, and cpp-httplib after v0.14.3 needs OpenSSL 3 (we use 1.1.1, like libtorrent-go).
+- macOS images build Boost with the b2 `darwin` toolset: the `clang` toolsets add `-m64`, which osxcross turns into x86_64.
+- 32-bit soft-float ARM (`linux-armv7_softfp`) is built for ARMv5TE + VFP, matching its libstdc++.
+
 Prepare new target OS:
 ----------
-- To build for specific OS, you need to create Dockerfile for that system.
+- Create `docker/<platform>.Dockerfile`: it sets the toolchain environment for `cmake/toolchains/cross.cmake` and `scripts/install_dependencies.sh`.
 - Add it into Makefile's list of platforms.
-- Run Docker build with `PLATFORM=linux-x64 make env`, replace `linux-x64` with name of your Dockerfile.
+- Build the image with `make env PLATFORM=<platform>`.
 
 Release
 -------
