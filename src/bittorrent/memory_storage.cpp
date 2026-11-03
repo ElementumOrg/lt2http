@@ -112,7 +112,8 @@ int memory_storage::readv(lt::span<lt::iovec_t const> bufs, lt::piece_index_t co
 
     if (is_logging) {
         OATPP_LOGI("memory_storage::readv", "readv out p: %d, pl: %d, bufs: %d/%d, off: %d, bs: %d, res: %d=%d", piece,
-                   pieces[piece].length, bufs.size(), bufs[0].size(), offset, buffers[pieces[piece].bi].buffer.size(), size, n);
+                   pieces[piece].length, int(bufs.size()), int(bufs[0].size()), offset, int(buffers[pieces[piece].bi].buffer.size()), size,
+                   n);
     }
 
     if (pieces[piece].is_completed && offset + n >= pieces[piece].size) {
@@ -128,7 +129,7 @@ int memory_storage::writev(lt::span<lt::iovec_t const> bufs, lt::piece_index_t c
                            lt::storage_error & /*ec*/) {
     auto piece = static_cast<int>(pi);
     if (is_logging) {
-        OATPP_LOGI("memory_storage::writev", "writev in  p: %d, off: %d, bufs: %d", piece, offset, bufs.size());
+        OATPP_LOGI("memory_storage::writev", "writev in  p: %d, off: %d, bufs: %d", piece, offset, int(bufs.size()));
     }
 
     if (!is_initialized)
@@ -157,7 +158,8 @@ int memory_storage::writev(lt::span<lt::iovec_t const> bufs, lt::piece_index_t c
 
     if (is_logging) {
         OATPP_LOGI("memory_storage::writev", "writev out p: %d, pl: %d, bufs: %d / %d, req: %d, off: %d, bs: %d, res: %d=%d", piece,
-                   pieces[piece].length, bufs.size(), bufs[0].size(), size, offset, buffers[pieces[piece].bi].buffer.size(), size, n);
+                   pieces[piece].length, int(bufs.size()), int(bufs[0].size()), size, offset, int(buffers[pieces[piece].bi].buffer.size()),
+                   size, n);
     }
 
     pieces[piece].size += n;
@@ -263,7 +265,7 @@ void memory_storage::trim(int pi) {
             int bi = find_last_buffer(pi, true);
             if (bi != -1) {
                 if (is_logging) {
-                    OATPP_LOGI("memory_storage::trim", "Removing non-read piece: %d, buffer:", buffers[bi].pi, bi);
+                    OATPP_LOGI("memory_storage::trim", "Removing non-read piece: %d, buffer: %d", buffers[bi].pi, bi);
                 }
                 remove_piece(bi);
                 continue;

@@ -394,7 +394,7 @@ void Torrent::file_priority(lt::file_index_t index, lt::download_priority_t prio
     if (is_memory_storage())
         return;
 
-    OATPP_LOGI("Torrent::file_priority", "Setting priority '%d' for file '%d'", priority, index);
+    OATPP_LOGI("Torrent::file_priority", "Setting priority '%d' for file '%d'", int(priority), int(index));
     with_handle([&](const lt::torrent_handle &h) { h.file_priority(index, priority); });
     save_resume_data();
 }
@@ -404,7 +404,7 @@ lt::download_priority_t Torrent::piece_priority(lt::piece_index_t index) const {
 }
 
 void Torrent::piece_priority(lt::piece_index_t index, lt::download_priority_t priority) {
-    OATPP_LOGI("Torrent::piece_priority", "Setting priority '%d' for piece '%d'", priority, index);
+    OATPP_LOGI("Torrent::piece_priority", "Setting priority '%d' for piece '%d'", int(priority), int(index));
     with_handle([&](const lt::torrent_handle &h) { h.piece_priority(index, std::clamp(priority, lt::dont_download, lt::top_priority)); });
 }
 
@@ -412,13 +412,13 @@ void Torrent::set_piece_deadline(lt::piece_index_t index, int deadline) {
     {
         std::scoped_lock guard(m_mutex);
         if (std::size_t(int(index)) >= m_deadline_pieces.size() || m_deadline_pieces.test(index)) {
-            OATPP_LOGI("Torrent::set_piece_deadline", "Skipping deadline for piece '%d'", index);
+            OATPP_LOGI("Torrent::set_piece_deadline", "Skipping deadline for piece '%d'", int(index));
             return;
         }
         m_deadline_pieces.set(index);
     }
 
-    OATPP_LOGI("Torrent::set_piece_deadline", "Setting deadline '%d' for piece '%d'", deadline, index);
+    OATPP_LOGI("Torrent::set_piece_deadline", "Setting deadline '%d' for piece '%d'", deadline, int(index));
     with_handle([&](const lt::torrent_handle &h) { h.set_piece_deadline(index, deadline); });
 }
 
@@ -572,7 +572,7 @@ void Torrent::dump(std::stringstream &ss) {
         auto pr = std::size_t(f->index()) < file_priorities.size() ? file_priorities[f->index()] : lt::dont_download;
         if (pr > 0) {
             ss << Fmt("        <a href=\"%s\" target=_blank>%s</a> (%s): %d \n", f->stream_uri().c_str(), f->path().c_str(),
-                      humanize_bytes(f->size()).c_str(), pr);
+                      humanize_bytes(f->size()).c_str(), int(pr));
         } else {
             ss << Fmt("        <a href=\"%s\" target=_blank>%s</a> (%s): - \n", f->stream_uri().c_str(), f->path().c_str(),
                       humanize_bytes(f->size()).c_str());

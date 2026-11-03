@@ -86,11 +86,11 @@ oatpp::v_io_size Reader::read(void *buffer, v_buff_size bufferSize, [[maybe_unus
     }
 
     if (ret <= 0) {
-        OATPP_LOGI("Reader::read", "Empty. Position=%s, n=%d, bs=%d", std::to_string(m_position).c_str(), ret, bufferSize);
+        OATPP_LOGI("Reader::read", "Empty. Position=%s, n=%d, bs=%d", std::to_string(m_position).c_str(), ret, int(bufferSize));
     } else if (ret < bufferSize) {
         OATPP_LOGI("Reader::read", "Not enough. Offset=%s, Position=%s, Start=%d, End=%d, FStart=%d, FEnd=%d, n=%d, bs=%d",
                    std::to_string(m_offset).c_str(), std::to_string(m_position).c_str(), m_piece_start.load(), m_piece_end,
-                   int(m_file->piece_start()), int(m_file->piece_end()), ret, bufferSize);
+                   int(m_file->piece_start()), int(m_file->piece_end()), ret, int(bufferSize));
     }
 
     return ret;
@@ -126,14 +126,14 @@ void Reader::wait_for_piece(int piece) {
 
         if (std::chrono::system_clock::now() - now > m_piece_timeout) {
             OATPP_LOGI("Reader::wait_for_piece", "Timed out waiting for piece '%d' with priority '%d'", piece,
-                       m_torrent->piece_priority(piece));
+                       int(m_torrent->piece_priority(piece)));
             return;
         }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(300));
     }
     OATPP_LOGI("Reader::wait_for_piece", "Done waiting for piece '%d' in %d ms", piece,
-               std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - now).count());
+               int(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - now).count()));
 }
 
 } // namespace lh

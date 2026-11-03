@@ -756,7 +756,7 @@ std::shared_ptr<Torrent> Session::add_torrent(std::string uri, bool is_paused, l
     if (!is_skip_priorities)
         p.file_priorities.assign(1001, lt::dont_download);
 
-    OATPP_LOGD("Session::add_torrent", "Loaded torrent has %d trackers", p.trackers.size());
+    OATPP_LOGD("Session::add_torrent", "Loaded torrent has %d trackers", int(p.trackers.size()));
     auto is_private = p.ti ? p.ti->priv() : false;
     if (!is_private && ((m_config.modify_trackers_strategy == lh::modify_trackers_t::first_time && is_first_time) ||
                         m_config.modify_trackers_strategy == lh::modify_trackers_t::each_time)) {
@@ -771,7 +771,7 @@ std::shared_ptr<Torrent> Session::add_torrent(std::string uri, bool is_paused, l
                 p.trackers.push_back(tracker);
         }
 
-        OATPP_LOGD("Session::add_torrent", "Updated torrent info has %d trackers", p.trackers.size());
+        OATPP_LOGD("Session::add_torrent", "Updated torrent info has %d trackers", int(p.trackers.size()));
     }
 
     OATPP_LOGD("Session::add_torrent", "Setting sequential download to: %s", !is_memory_storage ? "true" : "false");

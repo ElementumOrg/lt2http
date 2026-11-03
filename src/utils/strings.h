@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdarg>
 #include <cstdio>
 #include <random>
 #include <stdexcept>
@@ -9,13 +10,28 @@
 #include <libtorrent/hex.hpp>
 #include <libtorrent/sha1_hash.hpp>
 
-template <typename... Args> std::string Fmt(const std::string &format, Args... args) {
-    int size = snprintf(nullptr, 0, format.c_str(), args...);
+// printf-style formatting, checked by the compiler like printf
+#if defined(__GNUC__)
+__attribute__((format(printf, 1, 2)))
+#endif
+inline std::string
+Fmt(const char *format, ...) {
+    va_list args;
+    va_start(args, format);
+    va_list size_args;
+    va_copy(size_args, args);
+    int size = vsnprintf(nullptr, 0, format, size_args);
+    va_end(size_args);
+
+    std::string result;
+    if (size > 0) {
+        result.resize(size);
+        vsnprintf(&result[0], size + 1, format, args);
+    }
+    va_end(args);
+
     if (size < 0)
         throw std::runtime_error("Error during formatting");
-
-    std::string result(size, '\0');
-    snprintf(&result[0], size + 1, format.c_str(), args...);
     return result;
 }
 
