@@ -24,18 +24,19 @@ public:
     {
         OATPP_LOGI("Application::init", "Starting lt2http, version: %s, Libtorrent version: %s", lh::VERSION.c_str(), LIBTORRENT_VERSION)
 
-        // Redefine signal handler for proper logging.
-        std::signal(SIGINT, signalHandler);
-        std::signal(SIGABRT, signalHandler);
-        std::signal(SIGTERM, signalHandler);
-    #ifndef WIN32
-        std::signal(SIGKILL, signalHandler);
-    #endif
-        std::signal(SIGSEGV, signalHandler);
+        // The shared library can be started again in the same process, so state of a previous run is dropped.
+        destroy();
+        lh::is_closing.store(false);
+        _inst = new Application{argc, argv};
+    }
 
-        // Init single instance of application.
-        static Application instance{argc, argv};
-        _inst = &instance;
+    static void destroy() {
+        delete _inst;
+        _inst = nullptr;
+    }
+
+    static bool initialized() {
+        return _inst != nullptr;
     }
 
     static Application &get() {

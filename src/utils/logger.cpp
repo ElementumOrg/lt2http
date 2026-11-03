@@ -19,7 +19,7 @@ void CustomLogger::log(v_uint32 priority, const std::string &tag, const std::str
 
     std::lock_guard<std::mutex> lock(m_lock);
 
-    std::cout << "[";
+    m_out << "[";
 
     const char *timeFormat = "%Y-%m-%d %H:%M:%S";
     time_t seconds = std::chrono::duration_cast<std::chrono::seconds>(time).count();
@@ -28,44 +28,44 @@ void CustomLogger::log(v_uint32 priority, const std::string &tag, const std::str
 #ifdef OATPP_DISABLE_STD_PUT_TIME
     char timeBuffer[50];
     strftime(timeBuffer, sizeof(timeBuffer), m_config.timeFormat, &now);
-    std::cout << timeBuffer;
+    m_out << timeBuffer;
 #else
-    std::cout << std::put_time(&now, timeFormat);
+    m_out << std::put_time(&now, timeFormat);
 #endif
 
-    std::cout << "]";
+    m_out << "]";
 
     switch (priority) {
     case PRIORITY_V:
-        std::cout << "\033[0;0m VERB \033[0m";
+        m_out << "\033[0;0m VERB \033[0m";
         break;
 
     case PRIORITY_D:
-        std::cout << "\033[34;0m DEBU \033[0m";
+        m_out << "\033[34;0m DEBU \033[0m";
         break;
 
     case PRIORITY_I:
-        std::cout << "\033[32;0m INFO \033[0m";
+        m_out << "\033[32;0m INFO \033[0m";
         break;
 
     case PRIORITY_W:
-        std::cout << "\033[45;0m WARN \033[0m";
+        m_out << "\033[45;0m WARN \033[0m";
         break;
 
     case PRIORITY_E:
-        std::cout << "\033[41;0m ERRO \033[0m";
+        m_out << "\033[41;0m ERRO \033[0m";
         break;
 
     default:
-        std::cout << " " << priority << " ";
+        m_out << " " << priority << " ";
     }
 
-    std::cout << "|";
+    m_out << "|";
 
     if (message.empty()) {
-        std::cout << " > " << tag << std::endl;
+        m_out << " > " << tag << std::endl;
     } else {
-        std::cout << " " << tag << " > " << message << std::endl;
+        m_out << " " << tag << " > " << message << std::endl;
     }
 }
 

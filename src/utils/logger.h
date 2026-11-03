@@ -11,8 +11,11 @@ namespace lh {
 class CustomLogger : public oatpp::base::Logger {
   private:
     std::mutex m_lock;
+    std::ostream &m_out;
 
   public:
+    explicit CustomLogger(std::ostream &out = std::cout) : m_out(out) {}
+
     void log(v_uint32 priority, const std::string &tag, const std::string &message) override;
 };
 
