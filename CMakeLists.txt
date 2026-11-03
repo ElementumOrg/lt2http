@@ -73,13 +73,13 @@ target_include_directories(lt2http PRIVATE
         src/external/cpp-httplib
         src/external/json_struct/include)
 
-target_compile_definitions(lt2http PRIVATE LH_VERSION="${lt2http_version}")
-
-# changelog.md is served by /changelog: embed it, and configure again when it changes
+# The version and changelog.md (served by /changelog) go into one generated source file, so a new commit or
+# changelog only recompiles that file. CMake configures again when changelog.md changes.
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/changelog.md" lt2http_changelog)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS changelog.md)
-configure_file(cmake/changelog.h.in "${CMAKE_BINARY_DIR}/generated/changelog.h" @ONLY)
-target_include_directories(lt2http PRIVATE "${CMAKE_BINARY_DIR}/generated")
+set(build_info_source "${CMAKE_BINARY_DIR}/generated/build_info.cpp")
+configure_file(cmake/build_info.cpp.in "${build_info_source}" @ONLY)
+target_sources(lt2http PRIVATE "${build_info_source}")
 
 # Android before API 24 has no getifaddrs(), which cpp-httplib uses on non-Windows systems
 if (NOT WIN32)
@@ -142,8 +142,8 @@ endif ()
 
 if (build_tests)
     enable_testing()
-    add_executable(lt2http_tests tests/unit_tests.cpp)
-    target_include_directories(lt2http_tests PRIVATE src src/external/json_struct/include "${CMAKE_BINARY_DIR}/generated")
+    add_executable(lt2http_tests tests/unit_tests.cpp "${build_info_source}")
+    target_include_directories(lt2http_tests PRIVATE src src/external/json_struct/include)
     target_compile_definitions(lt2http_tests PRIVATE LT2HTTP_CHANGELOG_FILE="${CMAKE_CURRENT_SOURCE_DIR}/changelog.md")
     target_link_libraries(lt2http_tests PRIVATE oatpp::oatpp LibtorrentRasterbar::torrent-rasterbar Boost::filesystem)
     add_test(NAME unit_tests COMMAND lt2http_tests)

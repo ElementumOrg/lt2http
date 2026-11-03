@@ -7,15 +7,10 @@
 
 #include <json_struct/json_struct.h>
 
+#include <app/build_info.h>
 #include <utils/exceptions.h>
 
 namespace lh {
-
-#ifdef LH_VERSION
-inline const std::string VERSION = LH_VERSION;
-#else
-inline const std::string VERSION = "0.0.1";
-#endif
 
 constexpr int file_readahead_pieces = 20;
 constexpr std::int64_t memory_size_min = 40 * 1024 * 1024;

@@ -7,7 +7,7 @@
 
 #include <boost/filesystem.hpp>
 
-#include <changelog.h>
+#include <app/build_info.h>
 
 #include <app/config.h>
 #include <utils/numbers.h>

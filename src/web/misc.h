@@ -6,7 +6,7 @@
 
 #include <app/application.h>
 #include <app/config.h>
-#include <changelog.h>
+#include <app/build_info.h>
 
 #include OATPP_CODEGEN_BEGIN(ApiController)
 
