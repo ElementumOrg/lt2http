@@ -4,6 +4,7 @@
 
 #include <oatpp/core/Types.hpp>
 
+#include <algorithm>
 #include <memory>
 #include <tuple>
 #include <utility>
@@ -57,70 +58,86 @@ void File::set_priority(lt::download_priority_t priority) {
         m_torrent->file_priority(m_index, priority);
 }
 
-void File::add_buffer_piece(int piece) {
-    if (std::find(m_buffer_pieces.begin(), m_buffer_pieces.end(), piece) != m_buffer_pieces.end())
-        return;
-
-    m_torrent->piece_priority(piece, lt::top_priority);
-    m_torrent->set_piece_deadline(piece, 0);
-    m_buffer_size += m_torrent->piece_length_at(piece);
-    m_buffer_pieces.push_back(piece);
-}
-
-void File::add_buffer_region(std::int64_t offset, std::int64_t size) {
-    auto [first, last] = region_pieces(offset, size, m_torrent->piece_length(), m_torrent->pieces_count());
-    for (int i = int(first); i <= int(last); i++)
-        add_buffer_piece(i);
-}
-
 void File::start_buffer() {
     OATPP_LOGI("File::start_buffer", "Buffering file: %s/%s", m_torrent->hash().c_str(), m_name.c_str())
 
-    m_isBuffering = true;
-    m_buffer_progress = 0;
-    m_buffer_pieces.clear();
-    m_buffer_size = 0;
+    std::vector<int> pieces;
+    std::int64_t size = 0;
+    auto add_region = [&](std::int64_t offset, std::int64_t length) {
+        auto [first, last] = region_pieces(offset, length, m_torrent->piece_length(), m_torrent->pieces_count());
+        for (int piece = int(first); piece <= int(last); piece++) {
+            if (std::find(pieces.begin(), pieces.end(), piece) != pieces.end())
+                continue;
+            pieces.push_back(piece);
+            size += m_torrent->piece_length_at(piece);
+        }
+    };
 
     if (m_size >= m_start_buffer_size + m_end_buffer_size) {
-        add_buffer_region(m_offset, m_start_buffer_size);
-        add_buffer_region(m_offset + m_size - m_end_buffer_size, m_end_buffer_size);
+        add_region(m_offset, m_start_buffer_size);
+        add_region(m_offset + m_size - m_end_buffer_size, m_end_buffer_size);
     } else {
-        add_buffer_region(m_offset, m_size);
+        add_region(m_offset, m_size);
     }
 
-    if (m_torrent->is_memory_storage()) {
-        if (m_buffer_size > m_torrent->memory_size()) {
-            OATPP_LOGI("File::start_buffer", "Adjusting memory size to: %s", humanize_bytes(m_buffer_size).c_str())
-            m_torrent->memory_size(m_buffer_size);
+    for (int piece : pieces) {
+        m_torrent->piece_priority(piece, lt::top_priority);
+        m_torrent->set_piece_deadline(piece, 0);
+    }
+
+    if (m_torrent->is_memory_storage() && !pieces.empty()) {
+        if (size > m_torrent->memory_size()) {
+            OATPP_LOGI("File::start_buffer", "Adjusting memory size to: %s", humanize_bytes(size).c_str())
+            m_torrent->memory_size(size);
         }
 
         // Set reserved pieces for first piece and last piece of file
-        std::vector<int> reserved{m_buffer_pieces.front(), m_buffer_pieces.back()};
-        static_cast<lh::memory_storage *>(m_torrent->storage())->update_reserved_pieces(reserved);
+        m_torrent->update_reserved_pieces({pieces.front(), pieces.back()});
     }
 
-    OATPP_LOGI("File::start_buffer", "Buffering set: pieces=%d, size=%s", m_buffer_pieces.size(),
-               humanize_bytes(m_buffer_size).c_str())
+    OATPP_LOGI("File::start_buffer", "Buffering set: pieces=%d, size=%s", int(pieces.size()), humanize_bytes(size).c_str())
+
+    std::scoped_lock guard(m_bufferMutex);
+    m_buffer_pieces = std::move(pieces);
+    m_buffer_size = size;
+    m_buffer_progress = 0;
+    m_isBuffering = true;
 }
 
-void File::stop_buffer() { m_isBuffering = false; }
+void File::stop_buffer() {
+    std::scoped_lock guard(m_bufferMutex);
+    m_isBuffering = false;
+}
 
-bool File::is_buffering() const { return m_isBuffering; }
+bool File::is_buffering() const {
+    std::scoped_lock guard(m_bufferMutex);
+    return m_isBuffering;
+}
 
-double File::buffer_progress() const { return m_buffer_progress; }
+double File::buffer_progress() const {
+    std::scoped_lock guard(m_bufferMutex);
+    return m_buffer_progress;
+}
 
-std::int64_t File::buffer_size() const { return m_buffer_size; }
+std::int64_t File::buffer_size() const {
+    std::scoped_lock guard(m_bufferMutex);
+    return m_buffer_size;
+}
 
-void File::set_buffer_progress(double progress) { 
+void File::set_buffer_progress(double progress) {
     OATPP_LOGI("File::set_buffer_progress", "Updating buffer progress to %f", progress)
-    m_buffer_progress = progress; 
+
+    std::scoped_lock guard(m_bufferMutex);
+    m_buffer_progress = std::min(progress, 100.);
     if (m_buffer_progress >= 100) {
         OATPP_LOGI("File::set_buffer_progress", "Finished buffering")
-        m_buffer_progress = 100;
         m_isBuffering = false;
     }
 }
 
-std::vector<int> File::buffer_pieces() const { return m_buffer_pieces; }
+std::vector<int> File::buffer_pieces() const {
+    std::scoped_lock guard(m_bufferMutex);
+    return m_buffer_pieces;
+}
 
 } // namespace lh

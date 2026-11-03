@@ -489,33 +489,14 @@ void Session::consume_alerts() {
                 return;
             }
 
-            switch (a->type()) {
-            case lt::session_stats_header_alert::alert_type:
-            case lt::file_completed_alert::alert_type:
-                // Ignore alert
-                break;
-            case lt::save_resume_data_alert::alert_type:
-            case lt::dht_reply_alert::alert_type:
-            case lt::tracker_announce_alert::alert_type:
-            case lt::tracker_error_alert::alert_type:
-            case lt::tracker_reply_alert::alert_type:
-            case lt::tracker_warning_alert::alert_type:
-                // Handle alert to specific torrent
-                dispatch_alert(a);
-                break;
-            case lt::state_update_alert::alert_type:
-                handle_state_update_alert(static_cast<const lt::state_update_alert *>(a));
-                break;
-            case lt::session_stats_alert::alert_type:
-                handle_session_stats_alert(static_cast<const lt::session_stats_alert *>(a));
-                break;
-            case lt::metadata_received_alert::alert_type:
-                handle_metadata_received_alert(static_cast<const lt::metadata_received_alert *>(a));
-                break;
-            default:
-                OATPP_LOGD("Session::consume_alerts", "Alert: %s, Message: %s", a->what(), a->message().c_str());
+            // One failing alert must not stop the alerts thread
+            try {
+                handle_alert(a);
+            } catch (const std::exception &e) {
+                OATPP_LOGE("Session::consume_alerts", "Error handling alert %s: %s", a->what(), e.what());
             }
         }
+
         if (wait_for_abort(std::chrono::milliseconds(500))) {
             OATPP_LOGI("Session::consume_alerts", "Stop alert processing due to closing application");
             return;
@@ -533,22 +514,49 @@ void Session::consume_alerts() {
     }
 }
 
+void Session::handle_alert(const lt::alert *a) {
+    switch (a->type()) {
+    case lt::session_stats_header_alert::alert_type:
+    case lt::file_completed_alert::alert_type:
+        // Ignore alert
+        break;
+    case lt::save_resume_data_alert::alert_type:
+    case lt::dht_reply_alert::alert_type:
+    case lt::tracker_announce_alert::alert_type:
+    case lt::tracker_error_alert::alert_type:
+    case lt::tracker_reply_alert::alert_type:
+    case lt::tracker_warning_alert::alert_type:
+        // Handle alert to specific torrent
+        dispatch_alert(a);
+        break;
+    case lt::state_update_alert::alert_type:
+        handle_state_update_alert(static_cast<const lt::state_update_alert *>(a));
+        break;
+    case lt::session_stats_alert::alert_type:
+        handle_session_stats_alert(static_cast<const lt::session_stats_alert *>(a));
+        break;
+    case lt::metadata_received_alert::alert_type:
+        handle_metadata_received_alert(static_cast<const lt::metadata_received_alert *>(a));
+        break;
+    default:
+        OATPP_LOGD("Session::consume_alerts", "Alert: %s, Message: %s", a->what(), a->message().c_str());
+    }
+}
+
 void Session::prioritize() {
     OATPP_LOGI("Session::prioritize", "Starting prioritizer thread");
 
     for (;;) {
         for (const auto &t : torrents()) {
-            if (t->is_buffering()) {
-                // Calculate buffer progress
-                t->update_buffer_progress();
-
-                continue;
+            // One failing torrent must not stop the prioritizer
+            try {
+                if (t->is_buffering())
+                    t->update_buffer_progress();
+                else if (t->has_readers())
+                    t->prioritize();
+            } catch (const std::exception &e) {
+                OATPP_LOGE("Session::prioritize", "Error prioritizing torrent %s: %s", t->hash().c_str(), e.what());
             }
-
-            if (!t->has_readers())
-                continue;
-
-            t->prioritize();
         }
 
         if (wait_for_abort(std::chrono::milliseconds(500))) {
@@ -824,13 +832,19 @@ std::shared_ptr<Torrent> Session::get_torrent(const std::string &hash) const {
 bool Session::has_torrent(const std::string &hash) const { return find_torrent(hash) != nullptr; }
 
 bool Session::remove_torrent(const std::string &hash, bool is_delete_files, bool is_delete_data) {
-    auto torrent = get_torrent(hash);
+    // Taken out of the list first, so new requests and alerts do not find it while it is removed
+    std::shared_ptr<Torrent> torrent;
+    {
+        std::scoped_lock guard(m_torrentsMutex);
+        auto match = std::find_if(m_torrents.begin(), m_torrents.end(), [&hash](const std::shared_ptr<Torrent> &t) { return t->hash() == hash; });
+        if (match == m_torrents.end())
+            throw lh::TorrentException(Fmt("Torrent with hash '%s' not found", hash.c_str()));
+        torrent = *match;
+        m_torrents.erase(match);
+    }
+
     torrent->remove(is_delete_files, is_delete_data);
-
     OATPP_LOGI("Session::remove_torrent", "Removed torrent with hash: %s", torrent->hash().c_str());
-
-    std::scoped_lock guard(m_torrentsMutex);
-    m_torrents.erase(std::remove(m_torrents.begin(), m_torrents.end(), torrent), m_torrents.end());
 
     return true;
 }

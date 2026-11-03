@@ -4,6 +4,8 @@
 #include <chrono>
 #include <memory>
 #include <mutex>
+#include <shared_mutex>
+#include <type_traits>
 
 #include <boost/dynamic_bitset.hpp>
 
@@ -62,17 +64,35 @@ struct TrackerInfo {
 
 class Session;
 
+// Torrent state read by HTTP and background threads. The alerts thread replaces it as a whole,
+// so readers never call libtorrent for it and never see a half updated state.
+struct TorrentSnapshot {
+    lt::torrent_status status;
+    // Null until metadata is received
+    std::shared_ptr<const lt::torrent_info> info;
+    TorrentState state = TorrentState::Unknown;
+
+    bool has_metadata() const { return info && info->is_valid() && info->num_files() > 0; }
+    // As of the last status update, live checks use Torrent::have_piece()
+    bool have_piece(int piece) const;
+};
+
 class Torrent : public std::enable_shared_from_this<lh::Torrent> {
   private:
     std::shared_ptr<lt::session> m_nativeSession;
     lt::torrent_handle m_nativeHandle;
-    lt::torrent_status m_nativeStatus;
-    std::shared_ptr<lt::torrent_info> m_nativeInfo;
-    lt::storage_interface* m_file_storage = nullptr;
-    lh::memory_storage* m_memory_storage = nullptr;
-
     lh::storage_type_t m_storageType;
-    TorrentState m_state = TorrentState::Unknown;
+    std::string m_hash;
+
+    std::shared_ptr<const TorrentSnapshot> m_snapshot;
+    mutable std::mutex m_snapshotMutex;
+
+    // libtorrent handle and storage calls run under a shared lock, remove() takes it exclusively,
+    // so it waits for running calls, and calls after it see m_isClosing and do nothing.
+    mutable std::shared_mutex m_handleMutex;
+    std::atomic<bool> m_isClosing{false};
+    // Set once metadata is received, used under m_handleMutex
+    lt::storage_interface *m_storage = nullptr;
 
     // Files are replaced on the alerts thread, readers are (un)registered on HTTP threads
     // and iterated on the prioritizer thread.
@@ -80,46 +100,58 @@ class Torrent : public std::enable_shared_from_this<lh::Torrent> {
     mutable std::mutex m_filesMutex;
     std::map<std::int64_t, Reader*> m_readers;
     mutable std::mutex m_readersMutex;
-    std::map<std::string, TrackerInfo> m_trackerInfos;
 
-    std::string m_name;
-    std::string m_hash;
+    // Guards the tracker infos and deadline pieces
+    mutable std::mutex m_mutex;
+    std::map<std::string, TrackerInfo> m_trackerInfos;
+    Bitset m_deadline_pieces;
 
     std::string m_torrentFile;
     std::string m_resumeFile;
     std::string m_partsFile;
 
-    Bitset m_deadline_pieces;
-
-    bool m_hasSeedStatus = false;
-    bool m_isStopped = false;
+    std::atomic<bool> m_isStopped{false};
 
     std::chrono::time_point<std::chrono::system_clock> m_addedTime;
-    bool m_isClosing = false;
+
+    void set_snapshot(const lt::torrent_status &status, std::shared_ptr<const lt::torrent_info> info);
+    TorrentState compute_state(const lt::torrent_status &status, bool has_metadata) const;
+    void log_handle_error(const std::exception &e) const;
+    memory_storage *memory() const { return is_memory_storage() ? static_cast<memory_storage *>(m_storage) : nullptr; }
+
+    // Runs f(handle) while the torrent is in the session, returns a default value when it is removed
+    // (or being removed) or when libtorrent throws. f must not call with_handle() again.
+    template <typename F> auto with_handle(F &&f) const {
+        using R = std::invoke_result_t<F, const lt::torrent_handle &>;
+        std::shared_lock lock(m_handleMutex);
+        if (m_isClosing || !m_nativeHandle.is_valid())
+            return R();
+        try {
+            return f(m_nativeHandle);
+        } catch (const std::exception &e) {
+            log_handle_error(e);
+            return R();
+        }
+    }
 
   public:
     Torrent(std::shared_ptr<lt::session> nativeSession, const lt::torrent_handle &nativeHandle, lh::storage_type_t st, std::chrono::time_point<std::chrono::system_clock> added_time);
     ~Torrent();
 
-    std::shared_ptr<Torrent> get_shared_ptr() {
-        return shared_from_this();
-    }
-
-    lt::torrent_status &status();
+    std::shared_ptr<const TorrentSnapshot> snapshot() const;
     std::vector<std::shared_ptr<File>> files() const;
     std::shared_ptr<File> get_file(int index);
-    lt::storage_interface* storage();
 
     bool is_closing() const;
-    bool is_valid() const;
     const std::string &hash() const;
     std::string name() const;
     std::int64_t size() const;
-    int files_count() const;
     int piece_length() const;
     int piece_length_at(int index) const;
     int pieces_count() const;
     bool have_piece(lt::piece_index_t piece) const;
+    // Reads from the storage, 0 bytes once the torrent is removed
+    int read_piece(lt::iovec_t buffer, lt::piece_index_t piece, int offset, lt::storage_error &ec) const;
 
     bool has_metadata() const;
     void update_metadata();
@@ -127,26 +159,12 @@ class Torrent : public std::enable_shared_from_this<lh::Torrent> {
     void remove(bool is_delete_files, bool is_delete_data);
     bool is_memory_storage() const;
 
-    void update_status();
-    void update_status(const lt::torrent_status &nativeStatus);
+    void update_status(const lt::torrent_status &status);
     TorrentState state() const;
     std::string state_string() const;
-    void update_state();
-    bool has_error() const;
 
     bool is_buffering() const;
     bool is_paused() const;
-    bool is_queued() const;
-    bool is_checking() const;
-    bool is_downloading() const;
-    bool is_uploading() const;
-    bool is_completed() const;
-    bool is_active() const;
-    bool is_inactive() const;
-    bool is_errored() const;
-    bool is_seed() const;
-    bool is_forced() const;
-    bool is_sequential_download() const;
 
     std::int64_t upload_rate() const;
     std::int64_t download_rate() const;
@@ -154,8 +172,6 @@ class Torrent : public std::enable_shared_from_this<lh::Torrent> {
     std::int64_t total_done() const;
     std::int64_t total_wanted() const;
     std::int64_t total_wanted_done() const;
-    std::int64_t total_payload_upload() const;
-    std::int64_t total_payload_download() const;
     std::int64_t total_download() const;
     std::int64_t total_upload() const;
 
@@ -163,16 +179,10 @@ class Torrent : public std::enable_shared_from_this<lh::Torrent> {
     std::int64_t finished_time() const;
     std::int64_t seeding_time() const;
 
-    int connections_count() const;
-    int connections_limit() const;
     int seeds_count() const;
     int peers_count() const;
-    int leechers_count() const;
     int total_seeds_count() const;
     int total_peers_count() const;
-    int total_leechers_count() const;
-    int complete_count() const;
-    int incomplete_count() const;
 
     double progress() const;
     double progress_total() const;
@@ -188,15 +198,11 @@ class Torrent : public std::enable_shared_from_this<lh::Torrent> {
     void clear_piece_deadline(lt::piece_index_t index);
     void prioritize_pieces(lt::piece_index_t start, lt::piece_index_t end);
     void set_piece_priority(int piece, int deadline, lt::download_priority_t priority);
+    void update_reserved_pieces(const std::vector<int> &pieces);
 
     void dispatch_alert(const lt::alert *a);
     void handle_save_resume_data_alert(const lt::save_resume_data_alert *p);
-    void handle_dht_reply_alert(const lt::dht_reply_alert *p);
-    void handle_tracker_reply_alert(const lt::tracker_reply_alert *p);
-    void handle_tracker_warning_alert(const lt::tracker_warning_alert *p);
-    void handle_tracker_error_alert(const lt::tracker_error_alert *p);
     void update_tracker(const std::string &name, std::string message, int number);
-    void set_auto_managed(bool enable);
     void pause();
     void resume();
 

@@ -82,6 +82,7 @@ class Session {
     void handle_metadata_received_alert(const lt::metadata_received_alert *p);
     void handle_session_stats_alert(const lt::session_stats_alert *p);
     void dispatch_alert(const lt::alert *a);
+    void handle_alert(const lt::alert *a);
 
     static void remove_temporary_file(const std::string &path);
     void trigger_resume_data();

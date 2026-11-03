@@ -22,15 +22,19 @@
 #include <utils/path.h>
 #include <utils/strings.h>
 
-
 namespace lh {
+
+bool TorrentSnapshot::have_piece(int piece) const {
+    if (status.is_seeding)
+        return true;
+    return piece >= 0 && piece < status.pieces.size() && status.pieces.get_bit(lt::piece_index_t{piece});
+}
 
 Torrent::Torrent(std::shared_ptr<lt::session> nativeSession, const lt::torrent_handle &nativeHandle, const lh::storage_type_t st, std::chrono::time_point<std::chrono::system_clock> added_time)
     : m_nativeSession(std::move(nativeSession))
     , m_nativeHandle(nativeHandle)
-    , m_nativeInfo(std::const_pointer_cast<lt::torrent_info>(nativeHandle.torrent_file()))
-    , m_hash(to_hex(m_nativeHandle.info_hash()))
     , m_storageType(st)
+    , m_hash(to_hex(m_nativeHandle.info_hash()))
     , m_addedTime(added_time) {
     auto &config = lh::config();
 
@@ -38,12 +42,34 @@ Torrent::Torrent(std::shared_ptr<lt::session> nativeSession, const lt::torrent_h
     m_resumeFile = resume_file(config.torrents_path, m_hash);
     m_partsFile = parts_file(config.download_path, m_hash);
 
+    // Later updates come from the alerts thread, see Session::handle_state_update_alert()
+    set_snapshot(m_nativeHandle.status(), m_nativeHandle.torrent_file());
+
     OATPP_LOGI("Torrent", "Creating torrent with hash: %s", hash().c_str());
 }
 
 Torrent::~Torrent() { OATPP_LOGI("Torrent", "Destroying: %s", hash().c_str()); }
 
-lt::torrent_status &Torrent::status() { return m_nativeStatus; }
+void Torrent::log_handle_error(const std::exception &e) const {
+    OATPP_LOGE("Torrent", "libtorrent call failed for torrent %s: %s", m_hash.c_str(), e.what());
+}
+
+std::shared_ptr<const TorrentSnapshot> Torrent::snapshot() const {
+    std::scoped_lock guard(m_snapshotMutex);
+    return m_snapshot;
+}
+
+void Torrent::set_snapshot(const lt::torrent_status &status, std::shared_ptr<const lt::torrent_info> info) {
+    auto snapshot = std::make_shared<TorrentSnapshot>();
+    snapshot->status = status;
+    snapshot->info = std::move(info);
+    snapshot->state = compute_state(snapshot->status, snapshot->has_metadata());
+
+    std::scoped_lock guard(m_snapshotMutex);
+    m_snapshot = std::move(snapshot);
+}
+
+void Torrent::update_status(const lt::torrent_status &status) { set_snapshot(status, snapshot()->info); }
 
 std::vector<std::shared_ptr<File>> Torrent::files() const {
     std::scoped_lock guard(m_filesMutex);
@@ -60,90 +86,86 @@ std::shared_ptr<File> Torrent::get_file(int index) {
     return *match;
 }
 
-lt::storage_interface* Torrent::storage() {
-    if (is_memory_storage())
-        return m_memory_storage;
-
-    return m_file_storage;
-}
-
 bool Torrent::is_closing() const { return m_isClosing; }
 
-bool Torrent::is_valid() const { return (m_nativeInfo && m_nativeInfo->is_valid() && (m_nativeInfo->num_files() > 0)); }
-
 std::string Torrent::name() const {
-    if (!m_name.empty())
-        return m_name;
-
-    if (has_metadata())
-        return m_nativeInfo->name();
-
-    if (!m_nativeStatus.name.empty())
-        return m_nativeStatus.name;
-
-    return "";
+    auto s = snapshot();
+    return s->has_metadata() ? s->info->name() : s->status.name;
 }
 
 const std::string &Torrent::hash() const { return m_hash; }
 
 std::int64_t Torrent::size() const {
-    if (!is_valid())
-        return -1;
-    return m_nativeInfo->total_size();
-}
-
-int Torrent::files_count() const {
-    if (!is_valid())
-        return -1;
-    return m_nativeInfo->num_files();
+    auto s = snapshot();
+    return s->has_metadata() ? s->info->total_size() : -1;
 }
 
 int Torrent::piece_length() const {
-    if (!is_valid())
-        return -1;
-    return m_nativeInfo->piece_length();
+    auto s = snapshot();
+    return s->has_metadata() ? s->info->piece_length() : -1;
 }
 
 int Torrent::piece_length_at(const int index) const {
-    if (!is_valid())
-        return -1;
-    return m_nativeInfo->piece_size(lt::piece_index_t{index});
+    auto s = snapshot();
+    return s->has_metadata() ? s->info->piece_size(lt::piece_index_t{index}) : -1;
 }
 
 int Torrent::pieces_count() const {
-    if (!is_valid())
-        return -1;
-    return m_nativeInfo->num_pieces();
+    auto s = snapshot();
+    return s->has_metadata() ? s->info->num_pieces() : -1;
 }
 
-bool Torrent::have_piece(lt::piece_index_t piece) const { return m_nativeHandle.have_piece(piece); }
+bool Torrent::have_piece(lt::piece_index_t piece) const {
+    return with_handle([piece](const lt::torrent_handle &h) { return h.have_piece(piece); });
+}
 
-bool Torrent::has_metadata() const { return (m_nativeInfo && m_nativeInfo->is_valid() && (m_nativeInfo->num_files() > 0)); }
+int Torrent::read_piece(lt::iovec_t buffer, lt::piece_index_t piece, int offset, lt::storage_error &ec) const {
+    return with_handle([&](const lt::torrent_handle &) {
+        return m_storage ? m_storage->readv(buffer, piece, offset, lt::open_mode::read_only, ec) : 0;
+    });
+}
+
+bool Torrent::has_metadata() const { return snapshot()->has_metadata(); }
 
 void Torrent::update_metadata() {
-    m_nativeInfo = std::const_pointer_cast<lt::torrent_info>(m_nativeHandle.torrent_file());
+    auto info = with_handle([](const lt::torrent_handle &h) { return h.torrent_file(); });
+    set_snapshot(snapshot()->status, std::move(info));
 
     on_metadata_received();
 }
 
 void Torrent::on_metadata_received() {
+    auto info = snapshot()->info;
+    if (!info)
+        return;
+
     save_torrent_file();
     save_resume_data();
 
-    if (is_memory_storage()) {
-        m_memory_storage = dynamic_cast<lh::memory_storage *>(m_nativeHandle.get_storage_impl());
-        m_memory_storage->set_torrent_handle(m_nativeHandle);
-    } else {
-        m_file_storage = m_nativeHandle.get_storage_impl();
+    auto storage = with_handle([this](const lt::torrent_handle &h) {
+        auto *storage = h.get_storage_impl();
+        if (is_memory_storage())
+            static_cast<memory_storage *>(storage)->set_torrent_handle(h);
+        return storage;
+    });
+    {
+        std::unique_lock lock(m_handleMutex);
+        m_storage = storage;
+    }
+    {
+        std::scoped_lock guard(m_mutex);
+        m_deadline_pieces.resize(info->num_pieces());
     }
 
-    m_deadline_pieces.resize(m_nativeInfo->num_pieces());
-    auto const &storage = m_nativeInfo->files();
+    auto priorities = with_handle([](const lt::torrent_handle &h) { return h.get_file_priorities(); });
+    auto const &storage_files = info->files();
 
     std::vector<std::shared_ptr<File>> files;
-    for (int i = 0; i < m_nativeInfo->num_files(); i++) {
-        files.emplace_back(std::make_shared<lh::File>(this, lt::file_index_t(i), storage.file_path(i), storage.file_name(i).to_string(),
-                                                      storage.file_size(i), storage.file_offset(i), file_priority(i)));
+    for (int i = 0; i < info->num_files(); i++) {
+        auto priority = std::size_t(i) < priorities.size() ? priorities[i] : lt::dont_download;
+        files.emplace_back(std::make_shared<lh::File>(this, lt::file_index_t(i), storage_files.file_path(i),
+                                                      storage_files.file_name(i).to_string(), storage_files.file_size(i),
+                                                      storage_files.file_offset(i), priority));
     }
 
     std::scoped_lock guard(m_filesMutex);
@@ -154,7 +176,16 @@ void Torrent::remove(bool is_delete_files, bool is_delete_data) {
     m_isClosing = true;
 
     auto flags = is_delete_data && !is_memory_storage() ? lt::session::delete_files : lt::session::delete_partfile;
-    m_nativeSession->remove_torrent(m_nativeHandle, flags);
+    {
+        // Waits for running libtorrent and storage calls, later ones see m_isClosing
+        std::unique_lock lock(m_handleMutex);
+        try {
+            m_nativeSession->remove_torrent(m_nativeHandle, flags);
+        } catch (const std::exception &e) {
+            log_handle_error(e);
+        }
+        m_storage = nullptr;
+    }
 
     auto remove = [](const std::string &path) {
         if (file_exists(path)) {
@@ -176,14 +207,7 @@ void Torrent::remove(bool is_delete_files, bool is_delete_data) {
 
 bool Torrent::is_memory_storage() const { return m_storageType == storage_type_t::memory; }
 
-void Torrent::update_status() { update_status(m_nativeHandle.status()); }
-
-void Torrent::update_status(const lt::torrent_status &nativeStatus) {
-    m_nativeStatus = nativeStatus;
-    update_state();
-}
-
-TorrentState Torrent::state() const { return m_state; }
+TorrentState Torrent::state() const { return snapshot()->state; }
 
 std::string Torrent::state_string() const {
     switch (state()) {
@@ -230,61 +254,38 @@ std::string Torrent::state_string() const {
     }
 }
 
-void Torrent::update_state() {
-    if (m_nativeStatus.state == lt::torrent_status::checking_resume_data) {
-        m_state = TorrentState::CheckingResumeData;
-    }
-    // else if (isMoveInProgress())
-    // {
-    //     m_state = TorrentState::Moving;
-    // }
-    // else if (hasMissingFiles())
-    // {
-    //     m_state = TorrentState::MissingFiles;
-    // }
-    else if (has_error()) {
-        m_state = TorrentState::Error;
-    } else if (!has_metadata()) {
-        if (is_paused())
-            m_state = TorrentState::PausedDownloading;
-        // else if (m_session->isQueueingSystemEnabled() && isQueued())
-        else if (is_queued())
-            m_state = TorrentState::QueuedDownloading;
-        else
-            m_state = TorrentState::DownloadingMetadata;
-    } else if ((m_nativeStatus.state == lt::torrent_status::checking_files) &&
-               (!is_paused() || (m_nativeStatus.flags & lt::torrent_flags::auto_managed) ||
-                !(m_nativeStatus.flags & lt::torrent_flags::paused))) {
-        // If the torrent is not just in the "checking" state, but is being actually checked
-        m_state = m_hasSeedStatus ? TorrentState::CheckingUploading : TorrentState::CheckingDownloading;
-    } else if (m_nativeStatus.total_wanted == 0) {
-        m_state = TorrentState::Queued;
-    } else if (is_seed()) {
-        if (is_paused())
-            m_state = TorrentState::PausedUploading;
-        // else if (m_session->isQueueingSystemEnabled() && isQueued())
-        //     m_state = TorrentState::QueuedUploading;
-        else if (is_forced())
-            m_state = TorrentState::ForcedUploading;
-        else if (m_nativeStatus.upload_payload_rate > 0)
-            m_state = TorrentState::Uploading;
-        else
-            m_state = TorrentState::StalledUploading;
-    } else {
-        if (is_paused())
-            m_state = TorrentState::PausedDownloading;
-        // else if (m_session->isQueueingSystemEnabled() && isQueued())
-        //     m_state = TorrentState::QueuedDownloading;
-        else if (is_forced())
-            m_state = TorrentState::ForcedDownloading;
-        else if (m_nativeStatus.download_payload_rate > 0)
-            m_state = TorrentState::Downloading;
-        else
-            m_state = TorrentState::StalledDownloading;
-    }
-}
+TorrentState Torrent::compute_state(const lt::torrent_status &status, bool has_metadata) const {
+    const bool paused = is_paused();
+    const bool auto_managed = static_cast<bool>(status.flags & lt::torrent_flags::auto_managed);
+    const bool native_paused = static_cast<bool>(status.flags & lt::torrent_flags::paused);
 
-bool Torrent::has_error() const { return static_cast<bool>(m_nativeStatus.errc); }
+    if (status.state == lt::torrent_status::checking_resume_data)
+        return TorrentState::CheckingResumeData;
+    if (status.errc)
+        return TorrentState::Error;
+    if (!has_metadata) {
+        if (paused)
+            return TorrentState::PausedDownloading;
+        // Queued: not paused by us, but paused by libtorrent's queue
+        if (auto_managed && native_paused)
+            return TorrentState::QueuedDownloading;
+        return TorrentState::DownloadingMetadata;
+    }
+    // Being checked, not just in the "checking" state
+    if (status.state == lt::torrent_status::checking_files && (!paused || auto_managed || !native_paused))
+        return TorrentState::CheckingDownloading;
+    if (status.total_wanted == 0)
+        return TorrentState::Queued;
+    if (status.state == lt::torrent_status::finished || status.state == lt::torrent_status::seeding) {
+        if (paused)
+            return TorrentState::PausedUploading;
+        // Forced: not paused, as the queueing system is not used
+        return TorrentState::ForcedUploading;
+    }
+    if (paused)
+        return TorrentState::PausedDownloading;
+    return TorrentState::ForcedDownloading;
+}
 
 bool Torrent::is_buffering() const {
     auto all = files();
@@ -293,154 +294,75 @@ bool Torrent::is_buffering() const {
 
 bool Torrent::is_paused() const { return m_isStopped; }
 
-bool Torrent::is_queued() const {
-    // Torrent is Queued if it isn't in Paused state but paused internally
-    return (!is_paused() && (m_nativeStatus.flags & lt::torrent_flags::auto_managed) &&
-            (m_nativeStatus.flags & lt::torrent_flags::paused));
-}
+std::int64_t Torrent::upload_rate() const { return snapshot()->status.upload_payload_rate; }
 
-bool Torrent::is_checking() const {
-    return ((m_nativeStatus.state == lt::torrent_status::checking_files) ||
-            (m_nativeStatus.state == lt::torrent_status::checking_resume_data));
-}
+std::int64_t Torrent::download_rate() const { return snapshot()->status.download_payload_rate; }
 
-bool Torrent::is_downloading() const {
-    return m_state == TorrentState::Downloading || m_state == TorrentState::DownloadingMetadata ||
-           m_state == TorrentState::StalledDownloading || m_state == TorrentState::CheckingDownloading ||
-           m_state == TorrentState::PausedDownloading || m_state == TorrentState::QueuedDownloading ||
-           m_state == TorrentState::ForcedDownloading;
-}
+std::int64_t Torrent::total() const { return size(); }
 
-bool Torrent::is_uploading() const {
-    return m_state == TorrentState::Uploading || m_state == TorrentState::StalledUploading ||
-           m_state == TorrentState::CheckingUploading || m_state == TorrentState::QueuedUploading ||
-           m_state == TorrentState::ForcedUploading;
-}
+std::int64_t Torrent::total_done() const { return snapshot()->status.total_done; }
 
-bool Torrent::is_completed() const {
-    return m_state == TorrentState::Uploading || m_state == TorrentState::StalledUploading ||
-           m_state == TorrentState::CheckingUploading || m_state == TorrentState::PausedUploading ||
-           m_state == TorrentState::QueuedUploading || m_state == TorrentState::ForcedUploading;
-}
+std::int64_t Torrent::total_wanted() const { return snapshot()->status.total_wanted; }
 
-bool Torrent::is_active() const {
-    if (m_state == TorrentState::StalledDownloading)
-        return (upload_rate() > 0);
+std::int64_t Torrent::total_wanted_done() const { return snapshot()->status.total_wanted_done; }
 
-    return m_state == TorrentState::DownloadingMetadata || m_state == TorrentState::Downloading ||
-           m_state == TorrentState::ForcedDownloading || m_state == TorrentState::Uploading ||
-           m_state == TorrentState::ForcedUploading || m_state == TorrentState::Moving;
-}
+std::int64_t Torrent::total_download() const { return snapshot()->status.all_time_download; }
 
-bool Torrent::is_inactive() const { return !is_active(); }
+std::int64_t Torrent::total_upload() const { return snapshot()->status.all_time_upload; }
 
-bool Torrent::is_errored() const { return m_state == TorrentState::MissingFiles || m_state == TorrentState::Error; }
+std::int64_t Torrent::active_time() const { return lt::total_seconds(snapshot()->status.active_duration); }
 
-bool Torrent::is_seed() const {
-    return ((m_nativeStatus.state == lt::torrent_status::finished) || (m_nativeStatus.state == lt::torrent_status::seeding));
-}
+std::int64_t Torrent::finished_time() const { return lt::total_seconds(snapshot()->status.finished_duration); }
 
-bool Torrent::is_forced() const { return !is_paused(); }
+std::int64_t Torrent::seeding_time() const { return lt::total_seconds(snapshot()->status.seeding_duration); }
 
-bool Torrent::is_sequential_download() const {
-    return static_cast<bool>(m_nativeStatus.flags & lt::torrent_flags::sequential_download);
-}
+int Torrent::seeds_count() const { return snapshot()->status.num_seeds; }
 
-std::int64_t Torrent::upload_rate() const { return m_nativeStatus.upload_payload_rate; }
-
-std::int64_t Torrent::download_rate() const { return m_nativeStatus.download_payload_rate; }
-
-std::int64_t Torrent::total() const {
-    if (!is_valid())
-        return -1;
-    return m_nativeInfo->total_size();
-}
-
-std::int64_t Torrent::total_done() const { return m_nativeStatus.total_done; }
-
-std::int64_t Torrent::total_wanted() const { return m_nativeStatus.total_wanted; }
-
-std::int64_t Torrent::total_wanted_done() const { return m_nativeStatus.total_wanted_done; }
-
-std::int64_t Torrent::total_payload_upload() const { return m_nativeStatus.total_payload_upload; }
-
-std::int64_t Torrent::total_payload_download() const { return m_nativeStatus.total_payload_download; }
-
-std::int64_t Torrent::total_download() const { return m_nativeStatus.all_time_download; }
-
-std::int64_t Torrent::total_upload() const { return m_nativeStatus.all_time_upload; }
-
-std::int64_t Torrent::active_time() const { return lt::total_seconds(m_nativeStatus.active_duration); }
-
-std::int64_t Torrent::finished_time() const { return lt::total_seconds(m_nativeStatus.finished_duration); }
-
-std::int64_t Torrent::seeding_time() const { return lt::total_seconds(m_nativeStatus.seeding_duration); }
-
-int Torrent::connections_count() const { return m_nativeStatus.num_connections; }
-
-int Torrent::connections_limit() const { return m_nativeStatus.connections_limit; }
-
-int Torrent::seeds_count() const { return m_nativeStatus.num_seeds; }
-
-int Torrent::peers_count() const { return m_nativeStatus.num_peers; }
-
-int Torrent::leechers_count() const { return (m_nativeStatus.num_peers - m_nativeStatus.num_seeds); }
+int Torrent::peers_count() const { return snapshot()->status.num_peers; }
 
 int Torrent::total_seeds_count() const {
-    return (m_nativeStatus.num_complete > 0) ? m_nativeStatus.num_complete : m_nativeStatus.list_seeds;
+    auto const &status = snapshot()->status;
+    return status.num_complete > 0 ? status.num_complete : status.list_seeds;
 }
 
 int Torrent::total_peers_count() const {
-    const int peers = m_nativeStatus.num_complete + m_nativeStatus.num_incomplete;
-    return (peers > 0) ? peers : m_nativeStatus.list_peers;
-}
-
-int Torrent::total_leechers_count() const {
-    return (m_nativeStatus.num_incomplete > 0) ? m_nativeStatus.num_incomplete
-                                               : (m_nativeStatus.list_peers - m_nativeStatus.list_seeds);
-}
-
-int Torrent::complete_count() const { return m_nativeStatus.num_complete; }
-
-int Torrent::incomplete_count() const {
-    return m_nativeStatus.num_incomplete;
+    auto const &status = snapshot()->status;
+    const int peers = status.num_complete + status.num_incomplete;
+    return peers > 0 ? peers : status.list_peers;
 }
 
 double Torrent::progress() const {
-    if (is_checking())
-        return m_nativeStatus.progress;
+    auto const &status = snapshot()->status;
+    if (status.state == lt::torrent_status::checking_files || status.state == lt::torrent_status::checking_resume_data)
+        return status.progress;
 
-    if (m_nativeStatus.total_wanted == 0)
+    if (status.total_wanted == 0)
         return 0.;
 
-    if (m_nativeStatus.total_wanted_done == m_nativeStatus.total_wanted)
+    if (status.total_wanted_done == status.total_wanted)
         return 1.;
 
-    const double progress = static_cast<double>(m_nativeStatus.total_wanted_done) / m_nativeStatus.total_wanted;
-    return progress;
+    return static_cast<double>(status.total_wanted_done) / status.total_wanted;
 }
 
 double Torrent::progress_total() const {
-    if (total() <= 0)
+    auto total_size = total();
+    if (total_size <= 0)
         return 0;
 
-    return 100 * (double(total_done()) / double(total()));
+    return 100 * (double(total_done()) / double(total_size));
 }
 
 double Torrent::progress_wanted() const {
-    if (total_wanted() <= 0)
+    auto const &status = snapshot()->status;
+    if (status.total_wanted <= 0)
         return 0;
 
-    return 100 * (double(total_wanted_done()) / double(total_wanted()));
+    return 100 * (double(status.total_wanted_done) / double(status.total_wanted));
 }
 
 std::vector<double> Torrent::files_progress() const {
-    if (!has_metadata())
-        return {};
-
-    std::vector<int64_t> fp;
-    m_nativeHandle.file_progress(fp, lt::torrent_handle::piece_granularity);
-
+    auto fp = files_completed_bytes();
     auto all = files();
     const std::size_t count = std::min(fp.size(), all.size());
     std::vector<double> result;
@@ -460,47 +382,58 @@ std::vector<std::int64_t> Torrent::files_completed_bytes() const {
     if (!has_metadata())
         return {};
 
-    std::vector<std::int64_t> fp;
-    m_nativeHandle.file_progress(fp, lt::torrent_handle::piece_granularity);
-    return fp;
+    return with_handle([](const lt::torrent_handle &h) {
+        std::vector<std::int64_t> fp;
+        h.file_progress(fp, lt::torrent_handle::piece_granularity);
+        return fp;
+    });
 }
 
-lt::download_priority_t Torrent::file_priority(lt::file_index_t index) const { return m_nativeHandle.file_priority(index); }
+lt::download_priority_t Torrent::file_priority(lt::file_index_t index) const {
+    return with_handle([index](const lt::torrent_handle &h) { return h.file_priority(index); });
+}
 
 void Torrent::file_priority(lt::file_index_t index, lt::download_priority_t priority) {
     if (is_memory_storage())
         return;
 
     OATPP_LOGI("Torrent::file_priority", "Setting priority '%d' for file '%d'", priority, index);
-    m_nativeHandle.file_priority(index, priority);
+    with_handle([&](const lt::torrent_handle &h) { h.file_priority(index, priority); });
     save_resume_data();
 }
 
-lt::download_priority_t Torrent::piece_priority(lt::piece_index_t index) const { return m_nativeHandle.piece_priority(index); }
+lt::download_priority_t Torrent::piece_priority(lt::piece_index_t index) const {
+    return with_handle([index](const lt::torrent_handle &h) { return h.piece_priority(index); });
+}
 
 void Torrent::piece_priority(lt::piece_index_t index, lt::download_priority_t priority) {
     OATPP_LOGI("Torrent::piece_priority", "Setting priority '%d' for piece '%d'", priority, index);
-    m_nativeHandle.piece_priority(index, std::clamp(priority, lt::dont_download, lt::top_priority));
+    with_handle([&](const lt::torrent_handle &h) { h.piece_priority(index, std::clamp(priority, lt::dont_download, lt::top_priority)); });
 }
 
 void Torrent::set_piece_deadline(lt::piece_index_t index, int deadline) {
-    if (m_deadline_pieces.test(index)) {
-        OATPP_LOGI("Torrent::set_piece_deadline", "Skipping deadline for piece '%d'", index);
-        return;
+    {
+        std::scoped_lock guard(m_mutex);
+        if (std::size_t(int(index)) >= m_deadline_pieces.size() || m_deadline_pieces.test(index)) {
+            OATPP_LOGI("Torrent::set_piece_deadline", "Skipping deadline for piece '%d'", index);
+            return;
+        }
+        m_deadline_pieces.set(index);
     }
 
     OATPP_LOGI("Torrent::set_piece_deadline", "Setting deadline '%d' for piece '%d'", deadline, index);
-    m_deadline_pieces.set(index);
-    m_nativeHandle.set_piece_deadline(index, deadline);
+    with_handle([&](const lt::torrent_handle &h) { h.set_piece_deadline(index, deadline); });
 }
 
 void Torrent::clear_piece_deadline(lt::piece_index_t index) {
-    m_deadline_pieces.reset(index);
+    std::scoped_lock guard(m_mutex);
+    if (std::size_t(int(index)) < m_deadline_pieces.size())
+        m_deadline_pieces.reset(index);
 }
 
 void Torrent::prioritize_pieces(lt::piece_index_t start, lt::piece_index_t end) {
     for (int i = start; i <= end; ++i) {
-        if (m_nativeHandle.have_piece(i))
+        if (have_piece(i))
             continue;
 
         if (i == int(start)) {
@@ -518,23 +451,36 @@ void Torrent::set_piece_priority(int piece, int deadline, lt::download_priority_
     }
 }
 
+void Torrent::update_reserved_pieces(const std::vector<int> &pieces) {
+    with_handle([&](const lt::torrent_handle &) {
+        if (auto *storage = memory())
+            storage->update_reserved_pieces(pieces);
+    });
+}
+
 void Torrent::dispatch_alert(const lt::alert *a) {
     switch (a->type()) {
     case lt::save_resume_data_alert::alert_type:
         handle_save_resume_data_alert(static_cast<const lt::save_resume_data_alert *>(a));
         break;
     case lt::dht_reply_alert::alert_type:
-        handle_dht_reply_alert(static_cast<const lt::dht_reply_alert *>(a));
+        update_tracker("DHT", "", static_cast<const lt::dht_reply_alert *>(a)->num_peers);
         break;
-    case lt::tracker_reply_alert::alert_type:
-        handle_tracker_reply_alert(static_cast<const lt::tracker_reply_alert *>(a));
+    case lt::tracker_reply_alert::alert_type: {
+        auto *p = static_cast<const lt::tracker_reply_alert *>(a);
+        update_tracker(p->tracker_url(), p->message(), p->num_peers);
         break;
-    case lt::tracker_warning_alert::alert_type:
-        handle_tracker_warning_alert(static_cast<const lt::tracker_warning_alert *>(a));
+    }
+    case lt::tracker_warning_alert::alert_type: {
+        auto *p = static_cast<const lt::tracker_warning_alert *>(a);
+        update_tracker(p->tracker_url(), p->warning_message(), 0);
         break;
-    case lt::tracker_error_alert::alert_type:
-        handle_tracker_error_alert(static_cast<const lt::tracker_error_alert *>(a));
+    }
+    case lt::tracker_error_alert::alert_type: {
+        auto *p = static_cast<const lt::tracker_error_alert *>(a);
+        update_tracker(p->tracker_url(), p->error_message(), 0);
         break;
+    }
     }
 }
 
@@ -546,52 +492,33 @@ void Torrent::handle_save_resume_data_alert(const lt::save_resume_data_alert *p)
         OATPP_LOGE("Torrent::handle_save_resume_data_alert", "Could not save resume data to: %s", m_resumeFile.c_str());
 }
 
-void Torrent::handle_dht_reply_alert(const lt::dht_reply_alert *p) { 
-    update_tracker("DHT", "", p->num_peers); 
-}
-
-void Torrent::handle_tracker_reply_alert(const lt::tracker_reply_alert *p) {
-    update_tracker(p->tracker_url(), p->message(), p->num_peers);
-}
-void Torrent::handle_tracker_warning_alert(const lt::tracker_warning_alert *p) {
-    update_tracker(p->tracker_url(), p->warning_message(), 0);
-}
-
-void Torrent::handle_tracker_error_alert(const lt::tracker_error_alert *p) {
-    update_tracker(p->tracker_url(), p->error_message(), 0);
-}
-
-void Torrent::set_auto_managed(const bool enable) {
-    if (enable)
-        m_nativeHandle.set_flags(lt::torrent_flags::auto_managed);
-    else
-        m_nativeHandle.unset_flags(lt::torrent_flags::auto_managed);
-}
-
 void Torrent::pause() {
-    if (!m_isStopped)
-        m_isStopped = true;
+    m_isStopped = true;
 
-    set_auto_managed(false);
-    m_nativeHandle.pause();
+    with_handle([](const lt::torrent_handle &h) {
+        h.unset_flags(lt::torrent_flags::auto_managed);
+        h.pause();
+    });
 }
 
 void Torrent::resume() {
-    if (has_error())
-        m_nativeHandle.clear_error();
+    bool was_stopped = m_isStopped.exchange(false);
+    bool has_error = static_cast<bool>(snapshot()->status.errc);
 
-    if (m_isStopped) {
+    with_handle([&](const lt::torrent_handle &h) {
+        if (has_error)
+            h.clear_error();
         // Torrent may have been temporarily resumed to perform checking files
         // so we have to ensure it will not pause after checking is done.
-        m_nativeHandle.unset_flags(lt::torrent_flags::stop_when_ready);
-        m_isStopped = false;
-    }
-
-    set_auto_managed(true);
-    m_nativeHandle.resume();
+        if (was_stopped)
+            h.unset_flags(lt::torrent_flags::stop_when_ready);
+        h.set_flags(lt::torrent_flags::auto_managed);
+        h.resume();
+    });
 }
 
 void Torrent::update_tracker(const std::string &name, std::string message, int number) {
+    std::scoped_lock guard(m_mutex);
     auto &info = m_trackerInfos[name];
     info.lastMessage = std::move(message);
     info.numPeers = std::max(number, info.numPeers);
@@ -599,6 +526,8 @@ void Torrent::update_tracker(const std::string &name, std::string message, int n
 
 void Torrent::dump(std::stringstream &ss) {
     auto yes_no = [](bool value) { return value ? "true" : "false"; };
+    auto snap = snapshot();
+    auto const &status = snap->status;
 
     ss << Fmt("    Name:               %s \n", name().c_str());
     ss << Fmt("    Storage:            %s \n", storage_to_string(m_storageType));
@@ -608,45 +537,42 @@ void Torrent::dump(std::stringstream &ss) {
     ss << Fmt("    Piece length:       %s \n", humanize_bytes(piece_length()).c_str());
     ss << "\n";
     ss << "    Speed:\n";
-    ss << Fmt("        Download:   %s/s \n", humanize_bytes(download_rate()).c_str());
-    ss << Fmt("        Upload:     %s/s \n", humanize_bytes(upload_rate()).c_str());
+    ss << Fmt("        Download:   %s/s \n", humanize_bytes(status.download_payload_rate).c_str());
+    ss << Fmt("        Upload:     %s/s \n", humanize_bytes(status.upload_payload_rate).c_str());
     ss << "\n";
     ss << "    Size:\n";
     ss << Fmt("        Total:                  %s \n", humanize_bytes(total()).c_str());
-    ss << Fmt("        Done:                   %s (%.2f%%) \n", humanize_bytes(total_done()).c_str(), progress_total());
-    ss << Fmt("        Wanted:                 %s \n", humanize_bytes(total_wanted()).c_str());
-    ss << Fmt("        Wanted done:            %s (%.2f%%) \n", humanize_bytes(total_wanted_done()).c_str(), progress_wanted());
+    ss << Fmt("        Done:                   %s (%.2f%%) \n", humanize_bytes(status.total_done).c_str(), progress_total());
+    ss << Fmt("        Wanted:                 %s \n", humanize_bytes(status.total_wanted).c_str());
+    ss << Fmt("        Wanted done:            %s (%.2f%%) \n", humanize_bytes(status.total_wanted_done).c_str(), progress_wanted());
     ss << "\n";
     ss << "    Connections:\n";
-    ss << Fmt("        Connections:            %d \n", connections_count());
-    ss << Fmt("        Connections limit:      %d \n", connections_limit());
-    ss << Fmt("        Connected seeds:        %d \n", seeds_count());
-    ss << Fmt("        Connected peers:        %d \n", peers_count());
+    ss << Fmt("        Connections:            %d \n", status.num_connections);
+    ss << Fmt("        Connections limit:      %d \n", status.connections_limit);
+    ss << Fmt("        Connected seeds:        %d \n", status.num_seeds);
+    ss << Fmt("        Connected peers:        %d \n", status.num_peers);
     ss << Fmt("        All Seeds:              %d \n", total_seeds_count());
     ss << Fmt("        All Peers:              %d \n", total_peers_count());
 
     ss << "    Flags:\n";
-    ss << Fmt("        paused: %s \n", yes_no(m_nativeStatus.flags & lt::torrent_flags::paused));
-    ss << Fmt("        auto_managed: %s \n",
-              yes_no(m_nativeStatus.flags & lt::torrent_flags::auto_managed));
-    ss << Fmt("        sequential_download: %s \n",
-              yes_no(m_nativeStatus.flags & lt::torrent_flags::sequential_download));
-    ss << Fmt("        need_save_resume: %s \n",
-              yes_no(m_nativeStatus.flags & lt::torrent_flags::need_save_resume));
-    ss << Fmt("        is_seeding: %s \n", yes_no(m_nativeStatus.is_seeding));
-    ss << Fmt("        is_finished: %s \n", yes_no(m_nativeStatus.is_finished));
-    ss << Fmt("        has_metadata: %s \n", yes_no(m_nativeStatus.has_metadata));
-    ss << Fmt("        has_incoming: %s \n", yes_no(m_nativeStatus.has_incoming));
-    ss << Fmt("        moving_storage: %s \n", yes_no(m_nativeStatus.moving_storage));
-    ss << Fmt("        announcing_to_trackers: %s \n", yes_no(m_nativeStatus.announcing_to_trackers));
-    ss << Fmt("        announcing_to_lsd: %s \n", yes_no(m_nativeStatus.announcing_to_lsd));
-    ss << Fmt("        announcing_to_dht: %s \n", yes_no(m_nativeStatus.announcing_to_dht));
+    ss << Fmt("        paused: %s \n", yes_no(status.flags & lt::torrent_flags::paused));
+    ss << Fmt("        auto_managed: %s \n", yes_no(status.flags & lt::torrent_flags::auto_managed));
+    ss << Fmt("        sequential_download: %s \n", yes_no(status.flags & lt::torrent_flags::sequential_download));
+    ss << Fmt("        need_save_resume: %s \n", yes_no(status.flags & lt::torrent_flags::need_save_resume));
+    ss << Fmt("        is_seeding: %s \n", yes_no(status.is_seeding));
+    ss << Fmt("        is_finished: %s \n", yes_no(status.is_finished));
+    ss << Fmt("        has_metadata: %s \n", yes_no(status.has_metadata));
+    ss << Fmt("        has_incoming: %s \n", yes_no(status.has_incoming));
+    ss << Fmt("        moving_storage: %s \n", yes_no(status.moving_storage));
+    ss << Fmt("        announcing_to_trackers: %s \n", yes_no(status.announcing_to_trackers));
+    ss << Fmt("        announcing_to_lsd: %s \n", yes_no(status.announcing_to_lsd));
+    ss << Fmt("        announcing_to_dht: %s \n", yes_no(status.announcing_to_dht));
     ss << "\n";
 
     ss << "    Files (Priority):\n";
-    auto priorities = m_nativeHandle.get_file_priorities();
+    auto file_priorities = with_handle([](const lt::torrent_handle &h) { return h.get_file_priorities(); });
     for (auto &f : files()) {
-        auto pr = priorities[f->index()];
+        auto pr = std::size_t(f->index()) < file_priorities.size() ? file_priorities[f->index()] : lt::dont_download;
         if (pr > 0) {
             ss << Fmt("        <a href=\"%s\" target=_blank>%s</a> (%s): %d \n", f->stream_uri().c_str(), f->path().c_str(),
                       humanize_bytes(f->size()).c_str(), pr);
@@ -659,8 +585,13 @@ void Torrent::dump(std::stringstream &ss) {
     ss << "\n";
     ss << "    Trackers:\n";
 
+    auto tracker_infos = [this] {
+        std::scoped_lock guard(m_mutex);
+        return m_trackerInfos;
+    }();
+
     std::map<std::string, std::string> trackers;
-    for (auto &tracker : m_nativeHandle.trackers()) {
+    for (auto &tracker : with_handle([](const lt::torrent_handle &h) { return h.trackers(); })) {
         int scrape_complete = -1;
         int scrape_incomplete = -1;
         std::string message;
@@ -678,7 +609,7 @@ void Torrent::dump(std::stringstream &ss) {
                 message = endpoint.message;
         }
 
-        if (auto info = m_trackerInfos.find(tracker.url); scrape_incomplete == -1 && info != m_trackerInfos.end())
+        if (auto info = tracker_infos.find(tracker.url); scrape_incomplete == -1 && info != tracker_infos.end())
             scrape_incomplete = info->second.numPeers;
 
         trackers.emplace(tracker.url, Fmt("        %-60s: %-3s seeds, %-3s peers, updating: %-5s, is_working: %-5s, message: %s\n", tracker.url.c_str(),
@@ -690,7 +621,7 @@ void Torrent::dump(std::stringstream &ss) {
     for (const auto &[url, line] : trackers)
         ss << line;
 
-    if (auto dht = m_trackerInfos.find("DHT"); dht != m_trackerInfos.end()) {
+    if (auto dht = tracker_infos.find("DHT"); dht != tracker_infos.end()) {
         auto const &entry = dht->second;
         ss << Fmt("        %-60s: %-3s seeds, %-3s peers, updating: %-5s, is_working: %-5s, message: %s\n", "DHT", "-",
                   peer_num_to_string(entry.numPeers).c_str(), "false", "true", entry.lastMessage.c_str());
@@ -707,32 +638,36 @@ void Torrent::dump(std::stringstream &ss) {
             reader_positions.push_back(reader->piece_start());
     }
 
+    // One call for all priorities, pieces come from the snapshot
+    auto piece_priorities = with_handle([](const lt::torrent_handle &h) { return h.get_piece_priorities(); });
+    auto priority_of = [&](int i) { return std::size_t(i) < piece_priorities.size() ? int(piece_priorities[i]) : 0; };
+
     int total_prioritized = 0;
     int total_have = 0;
     for (int i = 0; i < pieces_count(); i++) {
         if (std::find(reader_positions.begin(), reader_positions.end(), i) != reader_positions.end()) {
             total_prioritized++;
             // Piece is in scope of Readers
-            if (m_nativeHandle.have_piece(lt::piece_index_t{i})) {
+            if (snap->have_piece(i)) {
                 total_have++;
                 ss << "<b>*</b>";
             } else {
                 ss << "<b>?</b>";
             }
-        } else if (m_nativeHandle.have_piece(lt::piece_index_t{i})) {
+        } else if (snap->have_piece(i)) {
             // We already have this piece
             total_have++;
-            if (m_nativeHandle.piece_priority(lt::piece_index_t{i}) > 0)
+            if (priority_of(i) > 0)
                 total_prioritized++;
 
             ss << "+";
-        } else if (m_nativeHandle.piece_priority(lt::piece_index_t{i}) == 0) {
+        } else if (priority_of(i) == 0) {
             // Piece is not prioritized
             ss << "-";
         } else {
             // Piece is in the queue
             total_prioritized++;
-            ss << int(m_nativeHandle.piece_priority(lt::piece_index_t{i}));
+            ss << priority_of(i);
         }
 
         if (i > 0 && (i + 1) % 100 == 0) {
@@ -740,7 +675,7 @@ void Torrent::dump(std::stringstream &ss) {
         }
     }
     ss << Fmt("\n        Readers: <b>%d</b>, Stored: <b>%d</b>, Prioritized: <b>%d</b>",
-                reader_positions.size(), total_have, total_prioritized);
+                int(reader_positions.size()), total_have, total_prioritized);
     ss << "\n\n\n";
     ss << "    " << std::string(150, '*') << "\n";
     ss << "\n\n";
@@ -749,7 +684,7 @@ void Torrent::dump(std::stringstream &ss) {
 void Torrent::save_resume_data() const {
     // Resume files are needed only for non-memory storage to keep the history and state.
     if (!is_memory_storage())
-        m_nativeHandle.save_resume_data();
+        with_handle([](const lt::torrent_handle &h) { h.save_resume_data(); });
 }
 
 void Torrent::save_torrent_file() const {
@@ -764,36 +699,48 @@ void Torrent::save_torrent_file() const {
 }
 
 std::vector<char> Torrent::generate() const {
-    if (!has_metadata())
+    auto info = snapshot()->info;
+    if (!info || !info->is_valid())
         throw lh::TorrentException("Torrent does not have metadata");
 
     OATPP_LOGI("Torrent::generate", "Generating torrent file for: %s", hash().c_str());
 
     std::vector<char> ret;
-    lt::bencode(std::back_inserter(ret), lt::create_torrent(*m_nativeInfo).generate());
+    lt::bencode(std::back_inserter(ret), lt::create_torrent(*info).generate());
     return ret;
 }
 
 std::int64_t Torrent::memory_size() const {
-    if (is_memory_storage())
-        return m_memory_storage->get_memory_size();
+    if (!is_memory_storage())
+        return lh::session().memory_size();
 
-    return lh::session().memory_size();
+    return with_handle([this](const lt::torrent_handle &) -> std::int64_t {
+        auto *storage = memory();
+        return storage ? storage->get_memory_size() : 0;
+    });
 }
 
 void Torrent::memory_size(std::int64_t size) {
-    if (is_memory_storage())
-        m_memory_storage->set_memory_size(size);
-    else
+    if (!is_memory_storage()) {
         lh::config().memory_size = int(size / 1024 / 1024);
+        return;
+    }
+
+    with_handle([&](const lt::torrent_handle &) {
+        if (auto *storage = memory())
+            storage->set_memory_size(size);
+    });
 }
 
 int Torrent::readahead_pieces() const {
-    if (is_memory_storage())
-        return m_memory_storage->get_buffers_count() * lh::config().readahead_percents / 100;
-    
-    // That is a static value of pieces with priority > 1 to set for file storage.
-    return lh::file_readahead_pieces;
+    if (!is_memory_storage())
+        // That is a static value of pieces with priority > 1 to set for file storage.
+        return lh::file_readahead_pieces;
+
+    return with_handle([this](const lt::torrent_handle &) {
+        auto *storage = memory();
+        return storage ? storage->get_buffers_count() * lh::config().readahead_percents / 100 : 0;
+    });
 }
 
 bool Torrent::has_readers() const {
@@ -833,7 +780,7 @@ void Torrent::prioritize() {
                 readers_finished++;
                 continue;
             }
-            
+
             if (std::find(reader_pieces.begin(), reader_pieces.end(), index) != reader_pieces.end())
                 continue;
 
@@ -844,16 +791,19 @@ void Torrent::prioritize() {
         }
     }
 
+    // One call for all priorities, pieces come from the snapshot
+    auto snap = snapshot();
+    auto priorities = with_handle([](const lt::torrent_handle &h) { return h.get_piece_priorities(); });
+    auto priority_of = [&](int piece) { return std::size_t(piece) < priorities.size() ? int(priorities[piece]) : 0; };
+
     // Remove non-needed priorities to release place for new pieces
     std::vector<std::pair<lt::piece_index_t, lt::download_priority_t>> pieces_request;
     if (is_memory_storage()) {
-        auto priorities = m_nativeHandle.get_piece_priorities();
         for (std::size_t piece = 0; piece < priorities.size(); ++piece) {
-            if (priorities.at(piece) <= 0)
+            if (priorities[piece] <= 0)
                 continue;
-            if (std::find(reader_pieces.begin(), reader_pieces.end(), piece) == reader_pieces.end()) {
-                pieces_request.emplace_back(std::pair<lt::piece_index_t, lt::download_priority_t>{piece, 0});
-            }
+            if (std::find(reader_pieces.begin(), reader_pieces.end(), int(piece)) == reader_pieces.end())
+                pieces_request.emplace_back(lt::piece_index_t(int(piece)), lt::dont_download);
         }
     }
 
@@ -865,7 +815,7 @@ void Torrent::prioritize() {
     int progression_group = 1;
     int progression_left = progression_result(progression_start, progression_multiplier, progression_group);
 
-    for (const auto& piece : reader_pieces) {
+    for (const auto &piece : reader_pieces) {
         if (progression_left <= 0 && progression_priority > 1) {
             progression_priority--;
             progression_group++;
@@ -874,28 +824,33 @@ void Torrent::prioritize() {
 
         progression_left--;
         int priority = std::max(2, progression_priority);
-        if (!have_piece(piece) && (piece_priority(piece) <= 0 || int(piece_priority(piece)) < priority)) {
-            pieces_request.emplace_back(std::pair<lt::piece_index_t, lt::download_priority_t>{piece, priority});
-        }
+        if (!snap->have_piece(piece) && priority_of(piece) < priority)
+            pieces_request.emplace_back(lt::piece_index_t(piece), lt::download_priority_t(priority));
     }
 
     if (!pieces_request.empty()) {
-        OATPP_LOGI("Torrent::prioritize", "Prioritizing %d pieces out of %d possible", pieces_request.size(), readahead_pieces())
-        m_nativeHandle.prioritize_pieces(pieces_request);
+        OATPP_LOGI("Torrent::prioritize", "Prioritizing %d pieces out of %d possible", int(pieces_request.size()), readahead_pieces())
+        with_handle([&](const lt::torrent_handle &h) { h.prioritize_pieces(pieces_request); });
     }
-    if (is_memory_storage()) {
-        m_memory_storage->update_reader_pieces(reader_pieces);
-    }
+
+    with_handle([&](const lt::torrent_handle &) {
+        if (auto *storage = memory())
+            storage->update_reader_pieces(reader_pieces);
+    });
 }
 
 void Torrent::update_buffer_progress() {
     if (!is_buffering())
         return;
 
-    std::vector<lt::partial_piece_info> pieces;
-    m_nativeHandle.get_download_queue(pieces);
+    auto snap = snapshot();
+    auto queue = with_handle([](const lt::torrent_handle &h) {
+        std::vector<lt::partial_piece_info> pieces;
+        h.get_download_queue(pieces);
+        return pieces;
+    });
 
-    for (const auto& file : files()) {
+    for (const auto &file : files()) {
         if (!file->is_buffering() || file->buffer_progress() >= 100 || file->buffer_size() <= 0)
             continue;
 
@@ -903,19 +858,16 @@ void Torrent::update_buffer_progress() {
         auto buffer_size = file->buffer_size();
         std::int64_t missing = 0;
 
-        for (const auto& piece : buffer_pieces) {
-            if (!have_piece(piece))
+        for (const auto &piece : buffer_pieces) {
+            if (!snap->have_piece(piece))
                 missing += piece_length_at(piece);
         }
 
         if (missing > 0) {
-            for (const auto& queue : pieces) {
-                if (std::find(buffer_pieces.begin(), buffer_pieces.end(), queue.piece_index) != buffer_pieces.end()) {
-                    auto *blocks = queue.blocks;
-                    auto blocksInPiece = queue.blocks_in_piece;
-                    for (int b = 0; b < blocksInPiece; b++) {
-                        missing -= blocks[b].bytes_progress;
-                    }
+            for (const auto &partial : queue) {
+                if (std::find(buffer_pieces.begin(), buffer_pieces.end(), int(partial.piece_index)) != buffer_pieces.end()) {
+                    for (int b = 0; b < partial.blocks_in_piece; b++)
+                        missing -= partial.blocks[b].bytes_progress;
                 }
             }
         }

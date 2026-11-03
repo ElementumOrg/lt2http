@@ -80,7 +80,7 @@ oatpp::v_io_size Reader::read(void *buffer, v_buff_size bufferSize, [[maybe_unus
             break;
         lt::iovec_t chunk = left.first(std::min<std::int64_t>(left.size(), piece_left));
 
-        int n = m_torrent->storage()->readv(chunk, p, int(piece_offset), lt::open_mode::read_only, ec);
+        int n = m_torrent->read_piece(chunk, p, int(piece_offset), ec);
         if (ec) {
             OATPP_LOGI("Reader::read", "Error from readv: %s", ec.ec.message().c_str());
             return ret + std::max(n, 0);

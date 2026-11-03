@@ -2,6 +2,8 @@
 
 #include <map>
 #include <memory>
+#include <mutex>
+#include <vector>
 
 #include <libtorrent/download_priority.hpp>
 #include <libtorrent/file_storage.hpp>
@@ -29,10 +31,13 @@ class File {
     lt::piece_index_t m_piece_start = 0;
     lt::piece_index_t m_piece_end = 0;
 
+    // Buffer state is set on HTTP threads and updated on the prioritizer thread
+    mutable std::mutex m_bufferMutex;
     bool m_isBuffering = false;
     std::vector<int> m_buffer_pieces;
     std::int64_t m_buffer_size = 0;
     double m_buffer_progress = 0;
+
     std::int64_t m_start_buffer_size = 0;
     std::int64_t m_end_buffer_size = 0;
 
@@ -53,8 +58,6 @@ class File {
 
     lt::download_priority_t priority() const;
     void set_priority(lt::download_priority_t priority);
-    void add_buffer_piece(int piece);
-    void add_buffer_region(std::int64_t offset, std::int64_t size);
 
     void start_buffer();
     void stop_buffer();
