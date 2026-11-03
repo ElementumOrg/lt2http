@@ -77,7 +77,7 @@ struct Config {
   public:
     std::string config_file;
     std::string write_config_file;
-    bool update_file;
+    bool update_file = false;
 
     std::string web_interface = "0.0.0.0";
     std::string web_login;
