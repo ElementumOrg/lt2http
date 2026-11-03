@@ -112,7 +112,7 @@ class Torrent : public std::enable_shared_from_this<lh::Torrent> {
 
     bool is_closing() const;
     bool is_valid() const;
-    std::string hash() const;
+    const std::string &hash() const;
     std::string name() const;
     std::int64_t size() const;
     int files_count() const;

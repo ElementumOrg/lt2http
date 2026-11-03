@@ -9,9 +9,9 @@ namespace lh {
 
 class ErrorHandler : public oatpp::web::server::handler::ErrorHandler {
 private:
-  typedef oatpp::web::protocol::http::outgoing::Response OutgoingResponse;
-  typedef oatpp::web::protocol::http::Status Status;
-  typedef oatpp::web::protocol::http::outgoing::ResponseFactory ResponseFactory;
+  using OutgoingResponse = oatpp::web::protocol::http::outgoing::Response;
+  using Status = oatpp::web::protocol::http::Status;
+  using ResponseFactory = oatpp::web::protocol::http::outgoing::ResponseFactory;
 private:
   std::shared_ptr<oatpp::data::mapping::ObjectMapper> m_objectMapper;
 public:

@@ -9,9 +9,9 @@ namespace lh {
 
 class AuthInterceptor : public oatpp::web::server::interceptor::RequestInterceptor {
   private:
-    typedef oatpp::web::protocol::http::outgoing::Response OutgoingResponse;
-    typedef oatpp::web::protocol::http::Status Status;
-    typedef oatpp::web::protocol::http::outgoing::ResponseFactory ResponseFactory;
+    using OutgoingResponse = oatpp::web::protocol::http::outgoing::Response;
+    using Status = oatpp::web::protocol::http::Status;
+    using ResponseFactory = oatpp::web::protocol::http::outgoing::ResponseFactory;
 
     oatpp::web::server::handler::BasicAuthorizationHandler m_authHandler;
 

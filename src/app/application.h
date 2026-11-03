@@ -65,20 +65,20 @@ protected:
     ~Application();
 };
 
-static Application &app() {
+inline Application &app() {
     return lh::Application::get();
 }
 
-static Config &config() {
+inline Config &config() {
     return lh::Application::get().config();
 }
 
-static Session &session() {
+inline Session &session() {
     return lh::Application::get().session();
 }
 
-static void set_close(bool val = true) {
+inline void set_close(bool val = true) {
     lh::is_closing.store(val);
-};
+}
 
 }

@@ -20,8 +20,6 @@ class File {
   private:
     Torrent* m_torrent;
 
-    bool m_isSelected;
-
     lt::file_index_t m_index = 0;
     std::string m_path;
     std::string m_name;
@@ -31,7 +29,7 @@ class File {
     lt::piece_index_t m_piece_start = 0;
     lt::piece_index_t m_piece_end = 0;
 
-    bool m_isBuffering;
+    bool m_isBuffering = false;
     std::vector<int> m_buffer_pieces;
     std::int64_t m_buffer_size = 0;
     double m_buffer_progress = 0;
@@ -44,8 +42,8 @@ class File {
     ~File();
 
     lt::file_index_t index() const;
-    std::string path() const;
-    std::string name() const;
+    const std::string &path() const;
+    const std::string &name() const;
     std::int64_t size() const;
     std::int64_t offset() const;
     std::string stream_uri() const;
@@ -56,6 +54,7 @@ class File {
     lt::download_priority_t priority() const;
     void set_priority(lt::download_priority_t priority);
     void add_buffer_piece(int piece);
+    void add_buffer_region(std::int64_t offset, std::int64_t size);
 
     void start_buffer();
     void stop_buffer();

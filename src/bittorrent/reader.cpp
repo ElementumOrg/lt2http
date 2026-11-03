@@ -31,23 +31,19 @@ Reader::~Reader() {
 
 std::int64_t Reader::id() const {
     return m_id;
-};
+}
 
 int Reader::piece_start() const {
     return m_piece_start;
-};
-
-int Reader::piece_end() const {
-    return m_piece_end;
-};
+}
 
 int Reader::piece_end_limit() const {
     return m_file->piece_end();
-};
+}
 
 bool Reader::is_closing() const {
     return m_isClosing;
-};
+}
 
 oatpp::v_io_size Reader::read(void *buffer, v_buff_size bufferSize, oatpp::async::Action &action) {
     std::lock_guard<std::mutex> g(m_lock);
@@ -124,8 +120,6 @@ int Reader::piece_from_offset(std::int64_t offset) const {
 
 std::int64_t Reader::piece_offset_from_offset(std::int64_t offset) const { return (m_offset + offset) % m_piece_size; }
 
-std::int64_t Reader::piece_offset(int piece) const { return std::int64_t(piece) * m_piece_size - m_offset; }
-
 void Reader::wait_for_piece(int piece) {
     OATPP_LOGI("Reader::wait_for_piece", "Waiting for piece: %d", piece);
 
@@ -148,29 +142,6 @@ void Reader::wait_for_piece(int piece) {
         std::this_thread::sleep_for(std::chrono::milliseconds(300));
     }
     OATPP_LOGI("Reader::wait_for_piece", "Done waiting for piece '%d' in %d ms", piece, std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - now).count());
-};
-
-void Reader::set_piece_priority(int piece, int deadline, lt::download_priority_t priority) {
-    if (m_torrent->piece_priority(piece) < priority) {
-        m_torrent->piece_priority(piece, priority);
-        m_torrent->set_piece_deadline(piece, deadline);
-    }
-}
-
-void Reader::set_pieces_priorities(int piece, int pieces) {
-    int end_piece = piece + pieces; //+ r.priorityPieces
-    int i = 0;
-    for (int p = piece; p <= end_piece && p <= m_piece_end; p++) {
-        if (!m_torrent->have_piece(p)) {
-            if (i <= pieces) {
-                set_piece_priority(p, 0, lt::download_priority_t{7});
-            } else {
-                set_piece_priority(p, (i - pieces) * 10, lt::download_priority_t{6});
-            }
-        }
-
-        i++;
-    }
 }
 
 } // namespace lh

@@ -18,13 +18,10 @@
 #include <bittorrent/reader.h>
 #include <bittorrent/session.h>
 
-#include <utils/date.h>
 #include <utils/numbers.h>
 #include <utils/path.h>
 #include <utils/strings.h>
 
-using namespace date;
-using namespace std::chrono;
 
 namespace lh {
 
@@ -46,7 +43,7 @@ Torrent::Torrent(std::shared_ptr<lt::session> nativeSession, const lt::torrent_h
 
 Torrent::~Torrent() { OATPP_LOGI("Torrent", "Destroying: %s", hash().c_str()); }
 
-lt::torrent_status &Torrent::status() { return m_nativeStatus; };
+lt::torrent_status &Torrent::status() { return m_nativeStatus; }
 
 std::vector<std::shared_ptr<File>> Torrent::files() const {
     std::lock_guard<std::mutex> guard(m_filesMutex);
@@ -61,14 +58,14 @@ std::shared_ptr<File> Torrent::get_file(int index) {
         throw lh::FileException(Fmt("File with index '%d' not found in torrent with hash '%s'", index, hash().c_str()));
 
     return *match;
-};
+}
 
 lt::storage_interface* Torrent::storage() {
     if (is_memory_storage())
         return m_memory_storage;
 
     return m_file_storage;
-};
+}
 
 bool Torrent::is_closing() const { return m_isClosing; }
 
@@ -87,7 +84,7 @@ std::string Torrent::name() const {
     return "";
 }
 
-std::string Torrent::hash() const { return m_hash; }
+const std::string &Torrent::hash() const { return m_hash; }
 
 std::int64_t Torrent::size() const {
     if (!is_valid())
@@ -119,7 +116,7 @@ int Torrent::pieces_count() const {
     return m_nativeInfo->num_pieces();
 }
 
-bool Torrent::have_piece(lt::piece_index_t piece) const { return m_nativeHandle.have_piece(piece); };
+bool Torrent::have_piece(lt::piece_index_t piece) const { return m_nativeHandle.have_piece(piece); }
 
 bool Torrent::has_metadata() const { return (m_nativeInfo && m_nativeInfo->is_valid() && (m_nativeInfo->num_files() > 0)); }
 
@@ -159,25 +156,19 @@ void Torrent::remove(bool is_delete_files, bool is_delete_data) {
     auto flags = is_delete_data && !is_memory_storage() ? lt::session::delete_files : lt::session::delete_partfile;
     m_nativeSession->remove_torrent(m_nativeHandle, flags);
 
-    if (is_delete_files) {
-        // Remove torrent file
-        if (file_exists(m_torrentFile)) {
-            OATPP_LOGI("Torrent::remove", "Removing file at: %s", m_torrentFile.c_str())
-            remove_file(m_torrentFile);
+    auto remove = [](const std::string &path) {
+        if (file_exists(path)) {
+            OATPP_LOGI("Torrent::remove", "Removing file at: %s", path.c_str())
+            remove_file(path);
         }
-    }
+    };
+
+    if (is_delete_files)
+        remove(m_torrentFile);
 
     if (is_delete_files || is_memory_storage()) {
-        // Remove resume + parts file
-        if (file_exists(m_resumeFile)) {
-            OATPP_LOGI("Torrent::remove", "Removing file at: %s", m_resumeFile.c_str())
-            remove_file(m_resumeFile);
-        }
-
-        if (file_exists(m_partsFile)) {
-            OATPP_LOGI("Torrent::remove", "Removing file at: %s", m_partsFile.c_str())
-            remove_file(m_partsFile);
-        }
+        remove(m_resumeFile);
+        remove(m_partsFile);
     }
 
     OATPP_LOGI("Torrent::remove", "Removed torrent with hash: %s", hash().c_str());
@@ -469,20 +460,12 @@ std::vector<std::int64_t> Torrent::files_completed_bytes() const {
     if (!has_metadata())
         return {};
 
-    std::vector<int64_t> fp;
+    std::vector<std::int64_t> fp;
     m_nativeHandle.file_progress(fp, lt::torrent_handle::piece_granularity);
-
-    const int count = static_cast<int>(fp.size());
-    std::vector<std::int64_t> result;
-    result.reserve(count);
-    for (int i = 0; i < count; ++i) {
-        result.push_back(fp[i]);
-    }
-
-    return result;
+    return fp;
 }
 
-lt::download_priority_t Torrent::file_priority(lt::file_index_t index) const { return m_nativeHandle.file_priority(index); };
+lt::download_priority_t Torrent::file_priority(lt::file_index_t index) const { return m_nativeHandle.file_priority(index); }
 
 void Torrent::file_priority(lt::file_index_t index, lt::download_priority_t priority) {
     if (is_memory_storage())
@@ -491,19 +474,14 @@ void Torrent::file_priority(lt::file_index_t index, lt::download_priority_t prio
     OATPP_LOGI("Torrent::file_priority", "Setting priority '%d' for file '%d'", priority, index);
     m_nativeHandle.file_priority(index, priority);
     save_resume_data();
-};
+}
 
-lt::download_priority_t Torrent::piece_priority(lt::piece_index_t index) const { return m_nativeHandle.piece_priority(index); };
+lt::download_priority_t Torrent::piece_priority(lt::piece_index_t index) const { return m_nativeHandle.piece_priority(index); }
 
 void Torrent::piece_priority(lt::piece_index_t index, lt::download_priority_t priority) {
     OATPP_LOGI("Torrent::piece_priority", "Setting priority '%d' for piece '%d'", priority, index);
-    if (priority < lt::dont_download)
-        priority = lt::dont_download;
-    else if (priority > lt::top_priority)
-        priority = lt::top_priority;
-
-    m_nativeHandle.piece_priority(index, priority);
-};
+    m_nativeHandle.piece_priority(index, std::min(std::max(priority, lt::dont_download), lt::top_priority));
+}
 
 void Torrent::set_piece_deadline(lt::piece_index_t index, int deadline) {
     if (m_deadline_pieces.test(index)) {
@@ -514,11 +492,11 @@ void Torrent::set_piece_deadline(lt::piece_index_t index, int deadline) {
     OATPP_LOGI("Torrent::set_piece_deadline", "Setting deadline '%d' for piece '%d'", deadline, index);
     m_deadline_pieces.set(index);
     m_nativeHandle.set_piece_deadline(index, deadline);
-};
+}
 
 void Torrent::clear_piece_deadline(lt::piece_index_t index) {
     m_deadline_pieces.reset(index);
-};
+}
 
 void Torrent::prioritize_pieces(lt::piece_index_t start, lt::piece_index_t end) {
     for (int i = start; i <= end; ++i) {
@@ -531,7 +509,7 @@ void Torrent::prioritize_pieces(lt::piece_index_t start, lt::piece_index_t end) 
             set_piece_priority(i, (i - int(start)) * 50, lt::download_priority_t{6});
         }
     }
-};
+}
 
 void Torrent::set_piece_priority(int piece, int deadline, lt::download_priority_t priority) {
     if (piece_priority(piece) < priority) {
@@ -563,26 +541,24 @@ void Torrent::dispatch_alert(const lt::alert *a) {
 void Torrent::handle_save_resume_data_alert(const lt::save_resume_data_alert *p) {
     OATPP_LOGI("Torrent::handle_save_resume_data_alert", "Saving resume data to: %s", m_resumeFile.c_str());
 
-    std::ofstream of(m_resumeFile, std::ios_base::binary);
-    of.unsetf(std::ios_base::skipws);
     auto const b = lt::write_resume_data_buf(p->params);
-    of.write(b.data(), b.size());
-};
+    save_file(m_resumeFile, b.data(), b.size());
+}
 
 void Torrent::handle_dht_reply_alert(const lt::dht_reply_alert *p) { 
     update_tracker("DHT", "", p->num_peers); 
-};
+}
 
 void Torrent::handle_tracker_reply_alert(const lt::tracker_reply_alert *p) {
     update_tracker(p->tracker_url(), p->message(), p->num_peers);
-};
+}
 void Torrent::handle_tracker_warning_alert(const lt::tracker_warning_alert *p) {
     update_tracker(p->tracker_url(), p->warning_message(), 0);
-};
+}
 
 void Torrent::handle_tracker_error_alert(const lt::tracker_error_alert *p) {
     update_tracker(p->tracker_url(), p->error_message(), 0);
-};
+}
 
 void Torrent::set_auto_managed(const bool enable) {
     if (enable)
@@ -615,15 +591,14 @@ void Torrent::resume() {
 }
 
 void Torrent::update_tracker(const std::string &name, std::string message, int number) {
-    auto it = m_trackerInfos.find(name);
-    if (it == m_trackerInfos.end())
-        m_trackerInfos[name] = {};
-
-    m_trackerInfos[name].lastMessage = std::move(message);
-    m_trackerInfos[name].numPeers = std::max(number, m_trackerInfos[name].numPeers);
+    auto &info = m_trackerInfos[name];
+    info.lastMessage = std::move(message);
+    info.numPeers = std::max(number, info.numPeers);
 }
 
 void Torrent::dump(std::stringstream &ss) {
+    auto yes_no = [](bool value) { return value ? "true" : "false"; };
+
     ss << Fmt("    Name:               %s \n", name().c_str());
     ss << Fmt("    Storage:            %s \n", storage_to_string(m_storageType));
     ss << Fmt("    Infohash:           %s \n", hash().c_str());
@@ -650,21 +625,21 @@ void Torrent::dump(std::stringstream &ss) {
     ss << Fmt("        All Peers:              %d \n", total_peers_count());
 
     ss << "    Flags:\n";
-    ss << Fmt("        paused: %s \n", static_cast<bool>(m_nativeStatus.flags & lt::torrent_flags::paused) ? "true" : "false");
+    ss << Fmt("        paused: %s \n", yes_no(m_nativeStatus.flags & lt::torrent_flags::paused));
     ss << Fmt("        auto_managed: %s \n",
-              static_cast<bool>(m_nativeStatus.flags & lt::torrent_flags::auto_managed) ? "true" : "false");
+              yes_no(m_nativeStatus.flags & lt::torrent_flags::auto_managed));
     ss << Fmt("        sequential_download: %s \n",
-              static_cast<bool>(m_nativeStatus.flags & lt::torrent_flags::sequential_download) ? "true" : "false");
+              yes_no(m_nativeStatus.flags & lt::torrent_flags::sequential_download));
     ss << Fmt("        need_save_resume: %s \n",
-              static_cast<bool>(m_nativeStatus.flags & lt::torrent_flags::need_save_resume) ? "true" : "false");
-    ss << Fmt("        is_seeding: %s \n", m_nativeStatus.is_seeding ? "true" : "false");
-    ss << Fmt("        is_finished: %s \n", m_nativeStatus.is_finished ? "true" : "false");
-    ss << Fmt("        has_metadata: %s \n", m_nativeStatus.has_metadata ? "true" : "false");
-    ss << Fmt("        has_incoming: %s \n", m_nativeStatus.has_incoming ? "true" : "false");
-    ss << Fmt("        moving_storage: %s \n", m_nativeStatus.moving_storage ? "true" : "false");
-    ss << Fmt("        announcing_to_trackers: %s \n", m_nativeStatus.announcing_to_trackers ? "true" : "false");
-    ss << Fmt("        announcing_to_lsd: %s \n", m_nativeStatus.announcing_to_lsd ? "true" : "false");
-    ss << Fmt("        announcing_to_dht: %s \n", m_nativeStatus.announcing_to_dht ? "true" : "false");
+              yes_no(m_nativeStatus.flags & lt::torrent_flags::need_save_resume));
+    ss << Fmt("        is_seeding: %s \n", yes_no(m_nativeStatus.is_seeding));
+    ss << Fmt("        is_finished: %s \n", yes_no(m_nativeStatus.is_finished));
+    ss << Fmt("        has_metadata: %s \n", yes_no(m_nativeStatus.has_metadata));
+    ss << Fmt("        has_incoming: %s \n", yes_no(m_nativeStatus.has_incoming));
+    ss << Fmt("        moving_storage: %s \n", yes_no(m_nativeStatus.moving_storage));
+    ss << Fmt("        announcing_to_trackers: %s \n", yes_no(m_nativeStatus.announcing_to_trackers));
+    ss << Fmt("        announcing_to_lsd: %s \n", yes_no(m_nativeStatus.announcing_to_lsd));
+    ss << Fmt("        announcing_to_dht: %s \n", yes_no(m_nativeStatus.announcing_to_dht));
     ss << "\n";
 
     ss << "    Files (Priority):\n";
@@ -709,18 +684,18 @@ void Torrent::dump(std::stringstream &ss) {
             }
         }
 
-        trackers.insert(std::pair<std::string, std::string>(tracker.url, Fmt("        %-60s: %-3s seeds, %-3s peers, updating: %-5s, is_working: %-5s, message: %s\n", tracker.url.c_str(),
+        trackers.emplace(tracker.url, Fmt("        %-60s: %-3s seeds, %-3s peers, updating: %-5s, is_working: %-5s, message: %s\n", tracker.url.c_str(),
                    peer_num_to_string(scrape_complete).c_str(), peer_num_to_string(scrape_incomplete).c_str(),
-                   is_updating ? "true" : "false", is_working ? "true" : "false", message.c_str())));
+                   yes_no(is_updating), yes_no(is_working), message.c_str()));
     }
 
     // List trackers information sorted by tracker url.
-    for (auto &i : trackers) {
-        ss << i.second;
-    }
+    for (const auto &tracker : trackers)
+        ss << tracker.second;
 
-    if (m_trackerInfos.find("DHT") != m_trackerInfos.end()) {
-        auto entry = m_trackerInfos["DHT"];
+    auto dht = m_trackerInfos.find("DHT");
+    if (dht != m_trackerInfos.end()) {
+        auto const &entry = dht->second;
         ss << Fmt("        %-60s: %-3s seeds, %-3s peers, updating: %-5s, is_working: %-5s, message: %s\n", "DHT", "-",
                   peer_num_to_string(entry.numPeers).c_str(), "false", "true", entry.lastMessage.c_str());
     }
@@ -787,16 +762,9 @@ void Torrent::save_torrent_file() const {
 
     OATPP_LOGI("Torrent::save_torrent_file", "Saving torrent file to: %s", m_torrentFile.c_str());
 
-    const lt::create_torrent creator = lt::create_torrent(*m_nativeInfo);
-    const lt::entry e = creator.generate();
-
-    std::vector<char> ret;
-    lt::bencode(std::back_inserter(ret), e);
-
-    std::ofstream of(m_torrentFile, std::ios_base::binary);
-    of.unsetf(std::ios_base::skipws);
-    of.write(ret.data(), ret.size());
-};
+    auto data = generate();
+    save_file(m_torrentFile, data.data(), data.size());
+}
 
 std::vector<char> Torrent::generate() const {
     if (!has_metadata())
@@ -804,11 +772,8 @@ std::vector<char> Torrent::generate() const {
 
     OATPP_LOGI("Torrent::generate", "Generating torrent file for: %s", hash().c_str());
 
-    const lt::create_torrent creator = lt::create_torrent(*m_nativeInfo);
-    const lt::entry e = creator.generate();
-
     std::vector<char> ret;
-    lt::bencode(std::back_inserter(ret), e);
+    lt::bencode(std::back_inserter(ret), lt::create_torrent(*m_nativeInfo).generate());
     return ret;
 }
 
@@ -817,14 +782,14 @@ std::int64_t Torrent::memory_size() const {
         return m_memory_storage->get_memory_size();
 
     return lh::session().memory_size();
-};
+}
 
 void Torrent::memory_size(std::int64_t size) {
     if (is_memory_storage())
         m_memory_storage->set_memory_size(size);
     else
         lh::config().memory_size = int(size / 1024 / 1024);
-};
+}
 
 int Torrent::readahead_pieces() const {
     if (is_memory_storage())
@@ -832,7 +797,7 @@ int Torrent::readahead_pieces() const {
     
     // That is a static value of pieces with priority > 1 to set for file storage.
     return lh::file_readahead_pieces;
-};
+}
 
 bool Torrent::has_readers() const {
     std::lock_guard<std::mutex> guard(m_readersMutex);
@@ -924,7 +889,7 @@ void Torrent::prioritize() {
     if (is_memory_storage()) {
         m_memory_storage->update_reader_pieces(reader_pieces);
     }
-};
+}
 
 void Torrent::update_buffer_progress() {
     if (!is_buffering())

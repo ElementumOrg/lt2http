@@ -29,7 +29,7 @@ Application::~Application() = default;
 
 lh::Config& Application::config() {
     return m_config;
-};
+}
 
 lh::Session& Application::session() {
     return m_session;
@@ -106,5 +106,5 @@ void signalHandler( int signum ) {
     if (signum == SIGSEGV) {
         std::cerr << boost::stacktrace::stacktrace();
         std::exit(signum);
-    };
+    }
 }

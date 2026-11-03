@@ -27,7 +27,7 @@ void CustomLogger::log(v_uint32 priority, const std::string &tag, const std::str
     localtime_r(&seconds, &now);
 #ifdef OATPP_DISABLE_STD_PUT_TIME
     char timeBuffer[50];
-    strftime(timeBuffer, sizeof(timeBuffer), m_config.timeFormat, &now);
+    strftime(timeBuffer, sizeof(timeBuffer), timeFormat, &now);
     m_out << timeBuffer;
 #else
     m_out << std::put_time(&now, timeFormat);

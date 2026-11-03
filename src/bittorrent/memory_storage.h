@@ -42,12 +42,12 @@ struct memory_piece {
     int index;
     int length;
 
-    int size;
-    int bi;
-    bool is_completed;
-    bool is_read;
+    int size = 0;
+    int bi = -1;
+    bool is_completed = false;
+    bool is_read = false;
 
-    memory_piece(int i, int length);
+    memory_piece(int i, int length) : index(i), length(length) {}
 
     bool is_buffered() const;
 
@@ -60,11 +60,11 @@ struct memory_buffer {
     int length;
     std::vector<char> buffer;
 
-    int pi;
-    bool is_used;
+    int pi = -1;
+    bool is_used = false;
     std::chrono::time_point<std::chrono::system_clock> accessed;
 
-    memory_buffer(int index, int length);
+    memory_buffer(int index, int length) : index(index), length(length), buffer(length) {}
 
     bool is_assigned() const;
 
@@ -79,27 +79,28 @@ struct memory_storage : lt::storage_interface {
     Bitset reader_pieces;
     Bitset reserved_pieces;
 
-    std::string id;
-    std::int64_t capacity;
+    std::int64_t capacity = 0;
 
-    int piece_count;
-    std::int64_t piece_length;
+    int piece_count = 0;
+    std::int64_t piece_length = 0;
     std::vector<memory_piece> pieces;
 
-    int buffer_size;
-    int buffer_limit;
-    int buffer_used;
-    int buffer_reserved;
+    int buffer_size = 0;
+    int buffer_limit = 0;
+    int buffer_used = 0;
+    int buffer_reserved = 0;
     std::vector<memory_buffer> buffers;
 
     lt::file_storage m_files;
     std::shared_ptr<lt::torrent> m_handle;
     lt::torrent_handle m_torrent;
 
-    bool is_logging;
-    bool is_initialized;
-    bool is_reading;
+    bool is_logging = false;
+    bool is_initialized = false;
     bool is_handled = false;
+
+    // Number of buffers that fit into capacity, at most one per piece.
+    int buffers_for_capacity() const;
 
   public:
     explicit memory_storage(lt::storage_params const &params);
@@ -125,10 +126,6 @@ struct memory_storage : lt::storage_interface {
     bool verify_resume_data(lt::add_torrent_params const & /*rd*/, lt::aux::vector<std::string, lt::file_index_t> const & /*links*/,
                             lt::storage_error & /*ec*/) override;
 
-    bool write_resume_data(lt::entry & /*rd*/) const;
-
-    void write_resume_data(lt::entry &rd, lt::storage_error &ec);
-
     void release_files(lt::storage_error &ec) override;
 
     void delete_files(lt::remove_flags_t /*options*/, lt::storage_error & /*ec*/) override;
@@ -138,12 +135,6 @@ struct memory_storage : lt::storage_interface {
     void set_torrent_handle(const lt::torrent_handle& th);
 
     void set_file_priority(lt::aux::vector<lt::download_priority_t, lt::file_index_t> & /*prio*/, lt::storage_error & /*ec*/) override;
-
-    int move_storage(std::string const & /*save_path*/, int  /*flags*/, lt::storage_error &ec);
-
-    void write_resume_data(lt::entry &rd, lt::storage_error &ec) const;
-
-    void delete_files(int options, lt::storage_error &ec);
 
     bool get_read_buffer(memory_piece *p);
 

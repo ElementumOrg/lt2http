@@ -35,7 +35,7 @@ using clk = std::chrono::steady_clock;
 
 namespace lh {
 
-const std::string extraTrackersURLTemplate = "https://ngosang.github.io/trackerslist/trackers_%s.txt";
+const char *const extraTrackersURLTemplate = "https://ngosang.github.io/trackerslist/trackers_%s.txt";
 const std::vector<std::string> defaultTrackers = {
     "http://bt.t-ru.org/ann",
     "http://bt2.t-ru.org/ann",
@@ -72,7 +72,6 @@ const std::vector<std::string> defaultTrackers = {
     "udp://torrent.by:2710",
     "udp://tracker.cortexlabs.ai:5008"
 };
-std::vector<std::string> extraTrackers;
 
 Session::Session(lh::Config &config) : m_config(config) {
     OATPP_LOGI("Session", "Starting libtorrent session");
@@ -122,26 +121,14 @@ void Session::run() {
 }
 
 void Session::check_directories() {
-    boost::system::error_code ec;
-    
-    if (m_config.torrents_path.empty())
-        throw lh::Exception("Cannot start without torrents_path setting");
+    for (const auto &dir : {std::make_pair("torrents_path", &m_config.torrents_path), std::make_pair("download_path", &m_config.download_path)}) {
+        if (dir.second->empty())
+            throw lh::Exception(Fmt("Cannot start without %s setting", dir.first));
 
-    ec = mkpath(m_config.torrents_path);
-    if (ec) {
-        OATPP_LOGI("Session::configure", "Failed to create torrents directory at %s: %s\n"
-        , m_config.torrents_path.c_str(), ec.message().c_str());
-        throw lh::Exception(ec.message());
-    }
-
-    if (m_config.download_path.empty())
-        throw lh::Exception("Cannot start without download_path setting");
-
-    ec = mkpath(m_config.download_path);
-    if (ec) {
-        OATPP_LOGI("Session::configure", "Failed to create downloads directory at %s: %s\n"
-        , m_config.download_path.c_str(), ec.message().c_str());
-        throw lh::Exception(ec.message());
+        if (auto ec = mkpath(*dir.second)) {
+            OATPP_LOGI("Session::configure", "Failed to create %s directory at %s: %s", dir.first, dir.second->c_str(), ec.message().c_str());
+            throw lh::Exception(ec.message());
+        }
     }
 }
 
@@ -286,21 +273,30 @@ void Session::configure() {
     m_pack.set_int(lt::settings_pack::proxy_type, lt::settings_pack::none);
     if (m_config.proxy_enabled && !m_config.proxy_host.empty()) {
         OATPP_LOGI("Session::configure", "Applying proxy settings...")
-        if (m_config.proxy_type == lh::proxy_type_t::socks4) {
+        switch (m_config.proxy_type) {
+        case lh::proxy_type_t::socks4:
             m_pack.set_int(lt::settings_pack::proxy_type, lt::settings_pack::socks4);
-        } else if (m_config.proxy_type == lh::proxy_type_t::socks5) {
+            break;
+        case lh::proxy_type_t::socks5:
             m_pack.set_int(lt::settings_pack::proxy_type, lt::settings_pack::socks5);
-        } else if (m_config.proxy_type == lh::proxy_type_t::socks5_pw) {
+            break;
+        case lh::proxy_type_t::socks5_pw:
             m_pack.set_int(lt::settings_pack::proxy_type, lt::settings_pack::socks5_pw);
-        } else if (m_config.proxy_type == lh::proxy_type_t::http) {
+            break;
+        case lh::proxy_type_t::http:
             m_pack.set_int(lt::settings_pack::proxy_type, lt::settings_pack::http);
-        } else if (m_config.proxy_type == lh::proxy_type_t::http_pw) {
+            break;
+        case lh::proxy_type_t::http_pw:
             m_pack.set_int(lt::settings_pack::proxy_type, lt::settings_pack::http_pw);
-        } else if (m_config.proxy_type == lh::proxy_type_t::i2p_proxy) {
+            break;
+        case lh::proxy_type_t::i2p_proxy:
             m_pack.set_int(lt::settings_pack::proxy_type, lt::settings_pack::i2p_proxy);
             m_pack.set_int(lt::settings_pack::i2p_port, m_config.proxy_port);
             m_pack.set_str(lt::settings_pack::i2p_hostname, m_config.proxy_host);
             m_pack.set_bool(lt::settings_pack::allow_i2p_mixed, true);
+            break;
+        default:
+            break;
         }
 
         m_pack.set_int(lt::settings_pack::proxy_port, m_config.proxy_port);
@@ -385,32 +381,22 @@ void Session::configure() {
     }
 
     std::vector<std::string> listen_interfaces{"0.0.0.0", "[::]"};
+    if (!m_config.listen_auto_detect_ip && !m_config.listen_interfaces.empty())
+        listen_interfaces = m_config.listen_interfaces;
 
-    if (!m_config.listen_auto_detect_ip && !m_config.listen_interfaces.empty()) {
-        listen_interfaces.clear();
-        listen_interfaces.assign(m_config.listen_interfaces.begin(), m_config.listen_interfaces.end());
-    }
-
+    // Two random ports per interface, if the range allows it.
+    int const ports_per_interface = m_config.listen_port_max > m_config.listen_port_min ? 2 : 1;
     m_mapped_ports.clear();
-    std::string listen_interfaces_result;
+    std::vector<std::string> listen_endpoints;
     for (const auto &i : listen_interfaces) {
-        int port = random(m_config.listen_port_min, m_config.listen_port_max);
-        m_mapped_ports[port] = {};
-        if (!listen_interfaces_result.empty())
-            listen_interfaces_result += ",";
-
-        listen_interfaces_result += i + ":" + std::to_string(port);
-
-        if (m_config.listen_port_max - m_config.listen_port_min > 0) {
-            port = random(m_config.listen_port_min, m_config.listen_port_max);
+        for (int n = 0; n < ports_per_interface; n++) {
+            int port = random(m_config.listen_port_min, m_config.listen_port_max);
             m_mapped_ports[port] = {};
-            if (!listen_interfaces_result.empty())
-                listen_interfaces_result += ",";
-
-            listen_interfaces_result += i + ":" + std::to_string(port);
+            listen_endpoints.push_back(i + ":" + std::to_string(port));
         }
     }
 
+    auto listen_interfaces_result = join(listen_endpoints, ",");
     m_pack.set_str(lt::settings_pack::listen_interfaces, listen_interfaces_result);
     OATPP_LOGI("Session::configure", "Listening on: %s", listen_interfaces_result.c_str());
 
@@ -629,12 +615,15 @@ void Session::load_trackers() {
     }
 
     OATPP_LOGD("Session::load_trackers", "Loading trackers with selection: %s", lh::extra_trackers_to_string(m_config.add_extra_trackers))
-    extraTrackers.clear();
-    for (const auto &t : defaultTrackers) {
-        extraTrackers.emplace_back(t);
-    }
+    std::vector<std::string> trackers = defaultTrackers;
+    auto use_trackers = [&] {
+        std::lock_guard<std::mutex> guard(m_extraTrackersMutex);
+        m_extraTrackers = std::move(trackers);
+        OATPP_LOGD("Session::load_trackers", "Using %d extra trackers", int(m_extraTrackers.size()));
+    };
 
     if (m_config.add_extra_trackers == lh::extra_trackers_t::minimum) {
+        use_trackers();
         return;
     }
 
@@ -643,30 +632,23 @@ void Session::load_trackers() {
 
     auto res = do_request(uri);
     if (!res) {
-        OATPP_LOGE("Could not download file from url '%s'. Response is null", uri.c_str());
-        return;
-    } 
-    if (res->status != 200) {
-        OATPP_LOGE("Could not download file from url '%s'. Status: %d", uri.c_str(), res->status);
-        return;
+        OATPP_LOGE("Session::load_trackers", "Could not download file from url '%s'. Response is null", uri.c_str());
+    } else if (res->status != 200) {
+        OATPP_LOGE("Session::load_trackers", "Could not download file from url '%s'. Status: %d", uri.c_str(), res->status);
+    } else {
+        std::istringstream ss(res->body);
+        std::string line;
+        while (std::getline(ss, line)) {
+            boost::trim(line);
+            if (!line.empty())
+                trackers.push_back(line);
+        }
     }
 
-    std::stringstream ss(res->body);
-    std::string line;
-
-    while(std::getline(ss, line,'\n')){
-        boost::trim(line);
-
-        if (line.empty())
-            continue;
-        
-        extraTrackers.emplace_back(line);
-    }
-
-    OATPP_LOGD("Session::load_trackers", "Using %d extra trackers", extraTrackers.size());
+    use_trackers();
 }
 
-std::shared_ptr<Torrent> Session::add_torrent(std::string &uri, bool is_paused, lh::storage_type_t st, 
+std::shared_ptr<Torrent> Session::add_torrent(std::string uri, bool is_paused, lh::storage_type_t st, 
     bool is_first_time, std::chrono::time_point<std::chrono::system_clock> added_time) {
     // Trim whitespaces
     boost::trim(uri);
@@ -764,10 +746,8 @@ std::shared_ptr<Torrent> Session::add_torrent(std::string &uri, bool is_paused, 
     p.max_connections = get_max_connections();
     p.save_path = m_config.download_path;
 
-    if (!is_skip_priorities) {
-        for (auto i = 0; i <= 1000; i++)
-            p.file_priorities.push_back(lt::download_priority_t{0});
-    }
+    if (!is_skip_priorities)
+        p.file_priorities.assign(1001, lt::dont_download);
 
     OATPP_LOGD("Session::add_torrent", "Loaded torrent has %d trackers", p.trackers.size());
     auto is_private = p.ti ? p.ti->priv() : false;
@@ -780,10 +760,10 @@ std::shared_ptr<Torrent> Session::add_torrent(std::string &uri, bool is_paused, 
             p.trackers.clear();
         
         // Add trackers to torrent info
-        for (auto &tr : extraTrackers) {
-            if (std::find_if(p.trackers.begin(), p.trackers.end(),
-                    [&tr](const std::string &t) { return t == tr; }) == p.trackers.end())
-                p.trackers.emplace_back(tr);
+        std::lock_guard<std::mutex> guard(m_extraTrackersMutex);
+        for (const auto &tracker : m_extraTrackers) {
+            if (std::find(p.trackers.begin(), p.trackers.end(), tracker) == p.trackers.end())
+                p.trackers.push_back(tracker);
         }
 
         OATPP_LOGD("Session::add_torrent", "Updated torrent info has %d trackers", p.trackers.size());
@@ -918,13 +898,11 @@ void Session::handle_metadata_received_alert(const lt::metadata_received_alert *
 }
 
 void Session::handle_session_stats_alert(const lt::session_stats_alert *p) {
-    std::vector<lt::stats_metric> map = lt::session_stats_metrics();
     auto counters = p->counters();
 
     m_session_stats.clear();
-    for (lt::stats_metric const &m : map) {
-        m_session_stats[m.name] = counters[m.value_index];
-    }
+    for (const auto &metric : lt::session_stats_metrics())
+        m_session_stats[metric.name] = counters[metric.value_index];
 }
 
 void Session::dispatch_alert(const lt::alert *a) {
@@ -932,7 +910,7 @@ void Session::dispatch_alert(const lt::alert *a) {
         torrent->dispatch_alert(a);
 }
 
-void Session::remove_temporary_file(std::string &path) {
+void Session::remove_temporary_file(const std::string &path) {
     if (!file_exists(path))
         return;
 
@@ -941,7 +919,7 @@ void Session::remove_temporary_file(std::string &path) {
         return;
 
     OATPP_LOGI("Session::remove_temporary_file", "Removing temporary file at: %s", path.c_str());
-    std::remove(path.c_str());
+    remove_file(path);
 }
 
 void Session::trigger_resume_data() {
@@ -950,17 +928,17 @@ void Session::trigger_resume_data() {
     }
 }
 
-std::int64_t Session::memory_size() const { return std::int64_t(m_config.memory_size) * 1024 * 1024; };
+std::int64_t Session::memory_size() const { return std::int64_t(m_config.memory_size) * 1024 * 1024; }
 
 bool Session::is_paused() const {
     return m_nativeSession->is_paused();
-};
+}
 
 void Session::pause() {
     m_nativeSession->pause();
-};
+}
 void Session::resume() {
     m_nativeSession->resume();
-};
+}
 
 } // namespace lh

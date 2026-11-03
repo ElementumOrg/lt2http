@@ -32,6 +32,10 @@ class Session {
     std::vector<std::shared_ptr<Torrent>> m_torrents;
     mutable std::mutex m_torrentsMutex;
 
+    // Written by the loader thread, read when adding torrents.
+    std::vector<std::string> m_extraTrackers;
+    std::mutex m_extraTrackersMutex;
+
     bool m_refresh_requested = false;
 
     // Background threads are owned and joined by the session, so they never outlive it.
@@ -62,7 +66,7 @@ class Session {
     void load_trackers();
 
     std::vector<std::shared_ptr<Torrent>> torrents();
-    std::shared_ptr<Torrent> add_torrent(std::string &uri, bool is_paused, lh::storage_type_t st, bool is_first_time, std::chrono::time_point<std::chrono::system_clock> added_time);
+    std::shared_ptr<Torrent> add_torrent(std::string uri, bool is_paused, lh::storage_type_t st, bool is_first_time, std::chrono::time_point<std::chrono::system_clock> added_time);
     std::shared_ptr<Torrent> get_torrent(const std::string &hash) const;
     // Returns nullptr if the torrent is not found.
     std::shared_ptr<Torrent> find_torrent(const std::string &hash) const;
@@ -79,7 +83,7 @@ class Session {
     void handle_session_stats_alert(const lt::session_stats_alert *p);
     void dispatch_alert(const lt::alert *a);
 
-    static void remove_temporary_file(std::string &path);
+    static void remove_temporary_file(const std::string &path);
     void trigger_resume_data();
 
     std::int64_t memory_size() const;

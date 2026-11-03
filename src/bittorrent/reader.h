@@ -45,7 +45,6 @@ class Reader : public oatpp::data::stream::ReadCallback {
 
     std::int64_t id() const;
     int piece_start() const;
-    int piece_end() const;
     int piece_end_limit() const;
 
     bool is_closing() const;
@@ -54,10 +53,7 @@ class Reader : public oatpp::data::stream::ReadCallback {
 
     int piece_from_offset(std::int64_t offset) const;
     std::int64_t piece_offset_from_offset(std::int64_t offset) const;
-    std::int64_t piece_offset(int piece) const;
     void wait_for_piece(int piece);
-    void set_piece_priority(int piece, int deadline, lt::download_priority_t priority);
-    void set_pieces_priorities(int piece, int pieces);
 };
 
 } // namespace lh

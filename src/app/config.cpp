@@ -15,6 +15,22 @@ namespace po = boost::program_options;
 
 namespace lh {
 
+namespace {
+
+// Option stored in a member, with the member's value as default.
+template <typename T> po::typed_value<T> *bound(T &value) { return po::value<T>(&value)->default_value(value); }
+
+bool is_set(const po::variables_map &vm, const char *name) { return vm.count(name) && !vm[name].defaulted(); }
+
+// Parses the option string into an enum member, if the option was given.
+template <typename StringStruct, typename T>
+void set_enum(const po::variables_map &vm, const char *name, const std::string &arg, T &target) {
+    if (is_set(vm, name))
+        target = from_string<T, StringStruct>(arg);
+}
+
+} // namespace
+
 std::int64_t memory_size = 0;
 
 std::string web_interface;
@@ -31,9 +47,9 @@ Config::Config(int &argc, char *argv[]) {
     generic.add_options()
         ("version,v",       "print version")
         ("help,h",          "print help")
-        ("config,c",        po::value<std::string>(&config_file)->default_value(config_file),
+        ("config,c",        bound(config_file),
                             "path to lt2http.json file")
-        ("write,w",         po::value<std::string>(&write_config_file)->default_value(write_config_file),
+        ("write,w",         bound(write_config_file),
                             "write current configuration to specific file")
         ("update,u",        "update config json file after initialization")
         ;
@@ -50,127 +66,127 @@ Config::Config(int &argc, char *argv[]) {
     // All configuration setting should be there
     po::options_description config("Configuration");
     config.add_options()
-        ("web_interface",                   po::value<std::string>(&web_interface)->default_value(web_interface),
+        ("web_interface",                   bound(web_interface),
                                             "Select which interface to listen for HTTP server")
-        ("web_login",                       po::value<std::string>(&web_login)->default_value(web_login),
+        ("web_login",                       bound(web_login),
                                             "Select which login to use for for HTTP server authentication")
-        ("web_password",                    po::value<std::string>(&web_password)->default_value(web_password),
+        ("web_password",                    bound(web_password),
                                             "Select which password to use for HTTP server authentication")
-        ("web_port",                        po::value<int>(&web_port)->default_value(web_port),
+        ("web_port",                        bound(web_port),
                                             "Select which port to listen for HTTP server")
 
-        ("download_storage",                po::value<std::string>(&download_storage_arg)->default_value(download_storage_arg),
+        ("download_storage",                bound(download_storage_arg),
                                             "Storage type for downloads")
-        ("auto_memory_size",                po::value<bool>(&auto_memory_size)->default_value(auto_memory_size),
+        ("auto_memory_size",                bound(auto_memory_size),
                                             "Automatically decide memory size")
-        ("auto_memory_size_strategy",       po::value<std::string>(&auto_memory_size_strategy_arg)->default_value(auto_memory_size_strategy_arg),
+        ("auto_memory_size_strategy",       bound(auto_memory_size_strategy_arg),
                                             "Strategy for automatic memory sizing")
-        ("memory_size", po::value<int>(&memory_size)->default_value(memory_size),
+        ("memory_size", bound(memory_size),
                                             "Memory size for memory storage (in MB)")
-        ("auto_adjust_memory_size",         po::value<bool>(&auto_adjust_memory_size)->default_value(auto_adjust_memory_size),
+        ("auto_adjust_memory_size",         bound(auto_adjust_memory_size),
                                             "Automatically increase memory size, depending on file size")
 
-        ("download_path",                   po::value<std::string>(&download_path)->default_value(download_path),
+        ("download_path",                   bound(download_path),
                                             "Folder to use for storing downloaded files (for File storage)")
-        ("torrents_path",                   po::value<std::string>(&torrents_path)->default_value(torrents_path),
+        ("torrents_path",                   bound(torrents_path),
                                             "Folder to use for storing active torrent files and fastresume files (for File storage)")
 
-        ("readahead_percents",              po::value<int>(&readahead_percents)->default_value(readahead_percents),
+        ("readahead_percents",              bound(readahead_percents),
                                             "Percentage to use for upcoming downloads. Rest is used for backward seek (Value: 1 to 100)")
 
-        ("buffer_size",                     po::value<int>(&buffer_size)->default_value(buffer_size),
+        ("buffer_size",                     bound(buffer_size),
                                             "Buffer size, to download before file is ready for playback (in MB)")
-        ("end_buffer_size",                 po::value<int>(&end_buffer_size)->default_value(end_buffer_size),
+        ("end_buffer_size",                 bound(end_buffer_size),
                                             "End-of-file buffer size, to download before file is ready for playback (in MB)")
-        ("buffer_timeout",                  po::value<int>(&buffer_timeout)->default_value(buffer_timeout),
+        ("buffer_timeout",                  bound(buffer_timeout),
                                             "Seconds to wait for buffer download (in seconds)")
 
-        ("max_upload_rate",                 po::value<int>(&max_upload_rate)->default_value(max_upload_rate),
+        ("max_upload_rate",                 bound(max_upload_rate),
                                             "Limit upload speed (in KB)")
-        ("max_download_rate",               po::value<int>(&max_download_rate)->default_value(max_download_rate),
+        ("max_download_rate",               bound(max_download_rate),
                                             "Limit download speed (in KB)")
-        ("limit_after_buffering",           po::value<bool>(&limit_after_buffering)->default_value(limit_after_buffering),
+        ("limit_after_buffering",           bound(limit_after_buffering),
                                             "Use speed limiting only after buffer is downloaded")
 
-        ("autoload_torrents",               po::value<bool>(&autoload_torrents)->default_value(autoload_torrents),
+        ("autoload_torrents",               bound(autoload_torrents),
                                             "Automatically load previous torrents where application is started")
-        ("autoload_torrents_paused",        po::value<bool>(&autoload_torrents_paused)->default_value(autoload_torrents_paused),
+        ("autoload_torrents_paused",        bound(autoload_torrents_paused),
                                             "Pause automatically loaded previous torrents after adding")
 
-        ("connections_limit",               po::value<int>(&connections_limit)->default_value(connections_limit),
+        ("connections_limit",               bound(connections_limit),
                                             "Limit connections per torrent")
-        ("conntracker_limit_auto",          po::value<bool>(&conntracker_limit_auto)->default_value(conntracker_limit_auto),
+        ("conntracker_limit_auto",          bound(conntracker_limit_auto),
                                             "Automatically set connection attempts")
-        ("conntracker_limit",               po::value<int>(&conntracker_limit)->default_value(conntracker_limit),
+        ("conntracker_limit",               bound(conntracker_limit),
                                             "Connection attempts per second")
 
-        ("seed_forever",                    po::value<bool>(&seed_forever)->default_value(seed_forever),
+        ("seed_forever",                    bound(seed_forever),
                                             "Do NOT stop seeding automatically")
-        ("share_ratio_limit",               po::value<int>(&share_ratio_limit)->default_value(share_ratio_limit),
+        ("share_ratio_limit",               bound(share_ratio_limit),
                                             "Stop seeding when this byte ratio is met")
-        ("seed_time_ratio_limit",           po::value<int>(&seed_time_ratio_limit)->default_value(seed_time_ratio_limit),
+        ("seed_time_ratio_limit",           bound(seed_time_ratio_limit),
                                             "Stop seeding when this time ratio is met")
-        ("seed_time_limit",                 po::value<int>(&seed_time_limit)->default_value(seed_time_limit),
+        ("seed_time_limit",                 bound(seed_time_limit),
                                             "Stop seeding after this time spent on seeding (in  hours)")
 
-        ("disable_dht",                     po::value<bool>(&disable_dht)->default_value(disable_dht),
+        ("disable_dht",                     bound(disable_dht),
                                             "Disable DHT")
-        ("disable_tcp",                     po::value<bool>(&disable_tcp)->default_value(disable_tcp),
+        ("disable_tcp",                     bound(disable_tcp),
                                             "Disable TCP")
-        ("disable_utp",                     po::value<bool>(&disable_utp)->default_value(disable_utp),
+        ("disable_utp",                     bound(disable_utp),
                                             "Disable UTP")
-        ("disable_upnp",                    po::value<bool>(&disable_upnp)->default_value(disable_upnp),
+        ("disable_upnp",                    bound(disable_upnp),
                                             "Disable UPNP")
-        ("disable_lsd",                     po::value<bool>(&disable_lsd)->default_value(disable_lsd),
+        ("disable_lsd",                     bound(disable_lsd),
                                             "Disable LSD")
 
-        ("listen_auto_detect_ip",           po::value<bool>(&listen_auto_detect_ip)->default_value(listen_auto_detect_ip),
+        ("listen_auto_detect_ip",           bound(listen_auto_detect_ip),
                                             "Automatically detect listen interface")
-        ("listen_interfaces",               po::value<std::string>(&listen_interfaces_arg)->default_value(listen_interfaces_arg),
+        ("listen_interfaces",               bound(listen_interfaces_arg),
                                             "Listen interfaces to use")
-        ("outgoing_interfaces",             po::value<std::string>(&outgoing_interfaces_arg)->default_value(outgoing_interfaces_arg),
+        ("outgoing_interfaces",             bound(outgoing_interfaces_arg),
                                             "Outgoing interfaces to use")
 
-        ("listen_auto_detect_port",         po::value<bool>(&listen_auto_detect_port)->default_value(listen_auto_detect_port),
+        ("listen_auto_detect_port",         bound(listen_auto_detect_port),
                                             "Automatically select ports for listening")
-        ("listen_port_min",                 po::value<int>(&listen_port_min)->default_value(listen_port_min),
+        ("listen_port_min",                 bound(listen_port_min),
                                             "Select minimal port number for range")
-        ("listen_port_max",                 po::value<int>(&listen_port_max)->default_value(listen_port_max),
+        ("listen_port_max",                 bound(listen_port_max),
                                             "Select maximum port number for range")
 
-        ("magnet_resolve_timeout",          po::value<int>(&magnet_resolve_timeout)->default_value(magnet_resolve_timeout),
+        ("magnet_resolve_timeout",          bound(magnet_resolve_timeout),
                                             "Timeout for resolving magnet (in seconds)")
 
-        ("tuned_storage",                   po::value<bool>(&tuned_storage)->default_value(tuned_storage),
+        ("tuned_storage",                   bound(tuned_storage),
                                             "Use tuned File storage (to lower random IO writes)")
-        ("disk_cache_size",                 po::value<int>(&disk_cache_size)->default_value(disk_cache_size),
+        ("disk_cache_size",                 bound(disk_cache_size),
                                             "Cache size use for File storage (in MB)")
 
-        ("session_save",                    po::value<int>(&session_save)->default_value(session_save),
+        ("session_save",                    bound(session_save),
                                             "Seconds between session backup")
-        ("encryption_policy",               po::value<std::string>(&encryption_policy_arg)->default_value(encryption_policy_arg),
+        ("encryption_policy",               bound(encryption_policy_arg),
                                             "Encryption policy")
-        ("spoof_user_agent",                po::value<std::string>(&spoof_user_agent_arg)->default_value(spoof_user_agent_arg),
+        ("spoof_user_agent",                bound(spoof_user_agent_arg),
                                             "Custom user agent for libtorrent")
 
-        ("proxy_enabled",                   po::value<bool>(&proxy_enabled)->default_value(proxy_enabled),
+        ("proxy_enabled",                   bound(proxy_enabled),
                                             "Enable proxy")
-        ("proxy_type",                      po::value<std::string>(&proxy_type_arg)->default_value(proxy_type_arg),
+        ("proxy_type",                      bound(proxy_type_arg),
                                             "Proxy type")
-        ("proxy_host",                      po::value<std::string>(&proxy_host)->default_value(proxy_host),
+        ("proxy_host",                      bound(proxy_host),
                                             "Proxy host")
-        ("proxy_port",                      po::value<int>(&proxy_port)->default_value(proxy_port),
+        ("proxy_port",                      bound(proxy_port),
                                             "Proxy port")
-        ("proxy_login",                     po::value<std::string>(&proxy_login)->default_value(proxy_login),
+        ("proxy_login",                     bound(proxy_login),
                                             "Proxy login")
-        ("proxy_password",                  po::value<std::string>(&proxy_password)->default_value(proxy_password),
+        ("proxy_password",                  bound(proxy_password),
                                             "Proxy password")
-        ("use_proxy_tracker",               po::value<bool>(&use_proxy_tracker)->default_value(use_proxy_tracker),
+        ("use_proxy_tracker",               bound(use_proxy_tracker),
                                             "Use proxy for requesting trackers")
-        ("use_proxy_download",              po::value<bool>(&use_proxy_download)->default_value(use_proxy_download),
+        ("use_proxy_download",              bound(use_proxy_download),
                                             "Use proxy for downloading data")
 
-        ("use_libtorrent_logging",          po::value<bool>(&use_libtorrent_logging)->default_value(use_libtorrent_logging),
+        ("use_libtorrent_logging",          bound(use_libtorrent_logging),
                                             "Enable full libtorrent logging (log all events)")
         ;
 
@@ -196,7 +212,7 @@ Config::Config(int &argc, char *argv[]) {
     }
 
     // Read configuration from file
-    if (vm.count("config") && !vm["config"].defaulted()) {
+    if (is_set(vm, "config")) {
         std::ifstream ifs(config_file.c_str());
         if (!ifs && !update_file) {
             OATPP_LOGE("Config", "Cannot open config file: %s", config_file.c_str());
@@ -221,32 +237,21 @@ Config::Config(int &argc, char *argv[]) {
     }
 
     // Convert string variables into enum types
-    if (vm.count("download_storage") && !vm["download_storage"].defaulted()) {
-        download_storage = lh::from_string<lh::storage_type_t, lh::js_storage_type_t_string_struct>(download_storage_arg);
-    }
-    if (vm.count("listen_interfaces") && !vm["listen_interfaces"].defaulted()) {
+    set_enum<js_storage_type_t_string_struct>(vm, "download_storage", download_storage_arg, download_storage);
+    if (is_set(vm, "listen_interfaces")) {
         boost::algorithm::split(listen_interfaces, listen_interfaces_arg, boost::is_any_of(", "), boost::token_compress_on);
     }
-    if (vm.count("outgoing_interfaces") && !vm["outgoing_interfaces"].defaulted()) {
+    if (is_set(vm, "outgoing_interfaces")) {
         boost::algorithm::split(outgoing_interfaces, outgoing_interfaces_arg, boost::is_any_of(", "), boost::token_compress_on);
     }
-    if (vm.count("auto_memory_size_strategy") && !vm["auto_memory_size_strategy"].defaulted()) {
-        auto_memory_size_strategy =
-            lh::from_string<lh::auto_memory_strategy_type_t, lh::js_auto_memory_strategy_type_t_string_struct>(
-                auto_memory_size_strategy_arg);
-    }
-    if (vm.count("encryption_policy") && !vm["encryption_policy"].defaulted()) {
-        encryption_policy = lh::from_string<lh::encryption_type_t, lh::js_encryption_type_t_string_struct>(encryption_policy_arg);
-    }
-    if (vm.count("spoof_user_agent") && !vm["spoof_user_agent"].defaulted()) {
-        spoof_user_agent = lh::from_string<lh::user_agent_type_t, lh::js_user_agent_type_t_string_struct>(spoof_user_agent_arg);
-    }
-    if (vm.count("proxy_type") && !vm["proxy_type"].defaulted()) {
-        proxy_type = lh::from_string<lh::proxy_type_t, lh::js_proxy_type_t_string_struct>(proxy_type_arg);
-    }
+    set_enum<js_auto_memory_strategy_type_t_string_struct>(vm, "auto_memory_size_strategy", auto_memory_size_strategy_arg,
+                                                           auto_memory_size_strategy);
+    set_enum<js_encryption_type_t_string_struct>(vm, "encryption_policy", encryption_policy_arg, encryption_policy);
+    set_enum<js_user_agent_type_t_string_struct>(vm, "spoof_user_agent", spoof_user_agent_arg, spoof_user_agent);
+    set_enum<js_proxy_type_t_string_struct>(vm, "proxy_type", proxy_type_arg, proxy_type);
 
     // Write current configuration to desired file
-    if (vm.count("write") && !vm["write"].defaulted()) {
+    if (is_set(vm, "write")) {
         std::ofstream ofs(write_config_file.c_str());
         if (!ofs) {
             OATPP_LOGE("Config", "Cannot open output file: %s", write_config_file.c_str());
