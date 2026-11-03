@@ -159,14 +159,12 @@ struct Config {
 
     Config(int &argc, char *argv[]);
 
-    bool is_auth_needed() const {
-        return !web_login.empty() || !web_password.empty();
-    }
+    bool is_auth_needed() const { return !web_login.empty() || !web_password.empty(); }
 
     JS_OBJECT(JS_MEMBER(web_interface), JS_MEMBER(web_port),
 
-              JS_MEMBER(download_storage), JS_MEMBER(auto_memory_size), JS_MEMBER(auto_memory_size_strategy),
-              JS_MEMBER(memory_size), JS_MEMBER(auto_adjust_memory_size),
+              JS_MEMBER(download_storage), JS_MEMBER(auto_memory_size), JS_MEMBER(auto_memory_size_strategy), JS_MEMBER(memory_size),
+              JS_MEMBER(auto_adjust_memory_size),
 
               JS_MEMBER(download_path), JS_MEMBER(torrents_path),
 
@@ -194,15 +192,14 @@ struct Config {
 
               JS_MEMBER(session_save), JS_MEMBER(encryption_policy), JS_MEMBER(spoof_user_agent),
 
-              JS_MEMBER(proxy_enabled), JS_MEMBER(proxy_type), JS_MEMBER(proxy_host), JS_MEMBER(proxy_port),
-              JS_MEMBER(proxy_login), JS_MEMBER(proxy_password), JS_MEMBER(use_proxy_tracker), JS_MEMBER(use_proxy_download),
+              JS_MEMBER(proxy_enabled), JS_MEMBER(proxy_type), JS_MEMBER(proxy_host), JS_MEMBER(proxy_port), JS_MEMBER(proxy_login),
+              JS_MEMBER(proxy_password), JS_MEMBER(use_proxy_tracker), JS_MEMBER(use_proxy_download),
 
               JS_MEMBER(use_libtorrent_logging),
 
               JS_MEMBER(remove_original_trackers), JS_MEMBER(add_extra_trackers), JS_MEMBER(modify_trackers_strategy),
 
-              JS_MEMBER(libtorrent_profile)
-            );
+              JS_MEMBER(libtorrent_profile));
 };
 
 // Helper template to convert enum to string and vice versa.

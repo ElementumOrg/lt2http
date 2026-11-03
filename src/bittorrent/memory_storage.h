@@ -113,10 +113,9 @@ struct memory_storage : lt::storage_interface {
 
     int get_buffers_count() const;
 
-    int readv(lt::span<lt::iovec_t const> bufs, lt::piece_index_t pi, int offset, lt::open_mode_t  /*mode*/,
-              lt::storage_error &ec) override;
+    int readv(lt::span<lt::iovec_t const> bufs, lt::piece_index_t pi, int offset, lt::open_mode_t /*mode*/, lt::storage_error &ec) override;
 
-    int writev(lt::span<lt::iovec_t const> bufs, lt::piece_index_t pi, int offset, lt::open_mode_t  /*mode*/,
+    int writev(lt::span<lt::iovec_t const> bufs, lt::piece_index_t pi, int offset, lt::open_mode_t /*mode*/,
                lt::storage_error &ec) override;
 
     void rename_file(lt::file_index_t index, std::string const &new_filename, lt::storage_error &ec) override;
@@ -132,7 +131,7 @@ struct memory_storage : lt::storage_interface {
 
     bool has_any_file(lt::storage_error & /*ec*/) override;
 
-    void set_torrent_handle(const lt::torrent_handle& th);
+    void set_torrent_handle(const lt::torrent_handle &th);
 
     void set_file_priority(lt::aux::vector<lt::download_priority_t, lt::file_index_t> & /*prio*/, lt::storage_error & /*ec*/) override;
 
@@ -156,9 +155,9 @@ struct memory_storage : lt::storage_interface {
 
     void disable_logging();
 
-    void update_reader_pieces(const std::vector<int>& pieces);
+    void update_reader_pieces(const std::vector<int> &pieces);
 
-    void update_reserved_pieces(const std::vector<int>& pieces);
+    void update_reserved_pieces(const std::vector<int> &pieces);
 
     bool is_reserved(int index) const;
 

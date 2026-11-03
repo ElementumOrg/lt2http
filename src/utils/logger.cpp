@@ -23,7 +23,7 @@ void CustomLogger::log(v_uint32 priority, const std::string &tag, const std::str
 
     const char *timeFormat = "%Y-%m-%d %H:%M:%S";
     time_t seconds = std::chrono::duration_cast<std::chrono::seconds>(time).count();
-    struct tm now {};
+    struct tm now{};
     localtime_r(&seconds, &now);
 #ifdef OATPP_DISABLE_STD_PUT_TIME
     char timeBuffer[50];
@@ -69,4 +69,4 @@ void CustomLogger::log(v_uint32 priority, const std::string &tag, const std::str
     }
 }
 
-}
+} // namespace lh

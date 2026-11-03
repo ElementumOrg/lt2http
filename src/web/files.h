@@ -19,8 +19,8 @@ class FilesController : public lh::Controller {
   public:
     explicit FilesController(OATPP_COMPONENT(std::shared_ptr<ObjectMapper>, objectMapper)) : lh::Controller(objectMapper) {}
 
-    static std::shared_ptr<FilesController> createShared(
-        OATPP_COMPONENT(std::shared_ptr<ObjectMapper>, objectMapper) // Inject objectMapper component here as default parameter
+    static std::shared_ptr<FilesController>
+    createShared(OATPP_COMPONENT(std::shared_ptr<ObjectMapper>, objectMapper) // Inject objectMapper component here as default parameter
     ) {
         return std::make_shared<FilesController>(objectMapper);
     }
@@ -38,11 +38,8 @@ class FilesController : public lh::Controller {
         info->addResponse<Object<FileOperationDto>>(Status::CODE_200, "application/json");
         info->addResponse<Object<FileOperationDto>>(Status::CODE_500, "application/json");
     }
-    ENDPOINT("GET", "/torrents/{infoHash}/files/{index}/download", download, 
-            PATH(String, hash_param, "infoHash"),
-            PATH(String, index_param, "index"), 
-            QUERY(String, buffer_param, "buffer", "false")
-    ) {
+    ENDPOINT("GET", "/torrents/{infoHash}/files/{index}/download", download, PATH(String, hash_param, "infoHash"),
+             PATH(String, index_param, "index"), QUERY(String, buffer_param, "buffer", "false")) {
         return fileOperation("FilesController::download", hash_param, index_param, [&](const std::string &hash, int index) {
             OATPP_LOGI("FilesController::download", "Downloading file index '%d' with torrent infohash: %s", index, hash.c_str())
 
@@ -64,10 +61,8 @@ class FilesController : public lh::Controller {
         info->addResponse<Object<FileOperationDto>>(Status::CODE_200, "application/json");
         info->addResponse<Object<FileOperationDto>>(Status::CODE_500, "application/json");
     }
-    ENDPOINT("GET", "/torrents/{infoHash}/files/{index}/stop", stop, 
-            PATH(String, hash_param, "infoHash"),
-            PATH(String, index_param, "index")
-    ) {
+    ENDPOINT("GET", "/torrents/{infoHash}/files/{index}/stop", stop, PATH(String, hash_param, "infoHash"),
+             PATH(String, index_param, "index")) {
         return fileOperation("FilesController::stop", hash_param, index_param, [&](const std::string &hash, int index) {
             OATPP_LOGI("FilesController::stop", "Stop downloading file index '%d' with torrent infohash: %s", index, hash.c_str())
 
@@ -87,11 +82,8 @@ class FilesController : public lh::Controller {
         info->addResponse<Object<FileInfoDto>>(Status::CODE_200, "application/json");
         info->addResponse<Object<FileOperationDto>>(Status::CODE_500, "application/json");
     }
-    ENDPOINT("GET", "/torrents/{infoHash}/files/{index}/info", info, 
-            PATH(String, hash_param, "infoHash"),
-            PATH(String, index_param, "index"), 
-            HEADER(String, hostHeader, Header::HOST)
-    ) {
+    ENDPOINT("GET", "/torrents/{infoHash}/files/{index}/info", info, PATH(String, hash_param, "infoHash"),
+             PATH(String, index_param, "index"), HEADER(String, hostHeader, Header::HOST)) {
         return fileOperation("FilesController::info", hash_param, index_param, [&](const std::string &hash, int index) {
             auto file = lh::session().get_torrent(hash)->get_file(index);
             std::string host = "http://" + *hostHeader;
@@ -108,10 +100,8 @@ class FilesController : public lh::Controller {
         info->addResponse<Object<FileStatusDto>>(Status::CODE_200, "application/json");
         info->addResponse<Object<FileOperationDto>>(Status::CODE_500, "application/json");
     }
-    ENDPOINT("GET", "/torrents/{infoHash}/files/{index}/status", status, 
-            PATH(String, hash_param, "infoHash"),
-            PATH(String, index_param, "index")
-    ) {
+    ENDPOINT("GET", "/torrents/{infoHash}/files/{index}/status", status, PATH(String, hash_param, "infoHash"),
+             PATH(String, index_param, "index")) {
         return fileOperation("FilesController::status", hash_param, index_param, [&](const std::string &hash, int index) {
             auto torrent = lh::session().get_torrent(hash);
             auto file = torrent->get_file(index);

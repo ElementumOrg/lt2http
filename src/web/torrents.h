@@ -18,8 +18,8 @@ class TorrentsController : public lh::Controller {
   public:
     explicit TorrentsController(OATPP_COMPONENT(std::shared_ptr<ObjectMapper>, objectMapper)) : lh::Controller(objectMapper) {}
 
-    static std::shared_ptr<TorrentsController> createShared(
-        OATPP_COMPONENT(std::shared_ptr<ObjectMapper>, objectMapper) // Inject objectMapper component here as default parameter
+    static std::shared_ptr<TorrentsController>
+    createShared(OATPP_COMPONENT(std::shared_ptr<ObjectMapper>, objectMapper) // Inject objectMapper component here as default parameter
     ) {
         return std::make_shared<TorrentsController>(objectMapper);
     }
@@ -34,9 +34,7 @@ class TorrentsController : public lh::Controller {
         info->addResponse<List<Object<TorrentInfoDto>>>(Status::CODE_200, "application/json");
         info->addResponse<Object<ErrorDto>>(Status::CODE_500, "application/json");
     }
-    ENDPOINT("GET", "/torrents", list,
-        QUERY(String, status_param, "status", "false")
-    ) {
+    ENDPOINT("GET", "/torrents", list, QUERY(String, status_param, "status", "false")) {
         return operation<ErrorDto>("TorrentsController::list", [&] {
             auto is_status = lh::is_true(status_param);
             auto list = oatpp::List<oatpp::Object<TorrentInfoDto>>::createShared();
@@ -63,11 +61,8 @@ class TorrentsController : public lh::Controller {
         info->addResponse<Object<TorrentOperationDto>>(Status::CODE_200, "application/json");
         info->addResponse<Object<TorrentOperationDto>>(Status::CODE_500, "application/json");
     }
-    ENDPOINT("GET", "/torrents/{infoHash}/remove", remove,
-        PATH(String, hash_param, "infoHash"),
-        QUERY(String, delete_files_param, "deleteFiles", "true"),
-        QUERY(String, delete_data_param, "deleteData", "false")
-    ) {
+    ENDPOINT("GET", "/torrents/{infoHash}/remove", remove, PATH(String, hash_param, "infoHash"),
+             QUERY(String, delete_files_param, "deleteFiles", "true"), QUERY(String, delete_data_param, "deleteData", "false")) {
         return torrentOperation("TorrentsController::remove", hash_param, [&](const std::string &hash) {
             OATPP_LOGI("TorrentsController::remove", "Removing torrent with infohash: %s", hash.c_str())
             lh::session().remove_torrent(hash, lh::is_true(delete_files_param), lh::is_true(delete_data_param));
@@ -83,9 +78,7 @@ class TorrentsController : public lh::Controller {
         info->addResponse<Object<TorrentOperationDto>>(Status::CODE_200, "application/json");
         info->addResponse<Object<TorrentOperationDto>>(Status::CODE_500, "application/json");
     }
-    ENDPOINT("GET", "/torrents/{infoHash}/resume", resume,
-        PATH(String, hash_param, "infoHash")
-    ) {
+    ENDPOINT("GET", "/torrents/{infoHash}/resume", resume, PATH(String, hash_param, "infoHash")) {
         return torrentOperation("TorrentsController::resume", hash_param, [&](const std::string &hash) {
             OATPP_LOGI("TorrentsController::resume", "Resuming torrent with infohash: %s", hash.c_str())
             lh::session().get_torrent(hash)->resume();
@@ -101,9 +94,7 @@ class TorrentsController : public lh::Controller {
         info->addResponse<Object<TorrentOperationDto>>(Status::CODE_200, "application/json");
         info->addResponse<Object<TorrentOperationDto>>(Status::CODE_500, "application/json");
     }
-    ENDPOINT("GET", "/torrents/{infoHash}/pause", pause,
-        PATH(String, hash_param, "infoHash")
-    ) {
+    ENDPOINT("GET", "/torrents/{infoHash}/pause", pause, PATH(String, hash_param, "infoHash")) {
         return torrentOperation("TorrentsController::pause", hash_param, [&](const std::string &hash) {
             OATPP_LOGI("TorrentsController::pause", "Pausing torrent with infohash: %s", hash.c_str())
             lh::session().get_torrent(hash)->pause();
@@ -123,10 +114,8 @@ class TorrentsController : public lh::Controller {
         info->addResponse<Object<TorrentInfoDto>>(Status::CODE_200, "application/json");
         info->addResponse<Object<TorrentOperationDto>>(Status::CODE_500, "application/json");
     }
-    ENDPOINT("GET", "/torrents/{infoHash}/info", info,
-        PATH(String, hash_param, "infoHash"),
-        QUERY(String, status_param, "status", "false")
-    ) {
+    ENDPOINT("GET", "/torrents/{infoHash}/info", info, PATH(String, hash_param, "infoHash"),
+             QUERY(String, status_param, "status", "false")) {
         return torrentOperation("TorrentsController::info", hash_param, [&](const std::string &hash) {
             OATPP_LOGI("TorrentsController::info", "Getting torrent info with infohash: %s", hash.c_str())
             auto torrent = lh::session().get_torrent(hash);
@@ -142,9 +131,7 @@ class TorrentsController : public lh::Controller {
         info->addResponse<Object<TorrentStatusDto>>(Status::CODE_200, "application/json");
         info->addResponse<Object<TorrentOperationDto>>(Status::CODE_500, "application/json");
     }
-    ENDPOINT("GET", "/torrents/{infoHash}/status", status,
-        PATH(String, hash_param, "infoHash")
-    ) {
+    ENDPOINT("GET", "/torrents/{infoHash}/status", status, PATH(String, hash_param, "infoHash")) {
         return torrentOperation("TorrentsController::status", hash_param, [&](const std::string &hash) {
             OATPP_LOGI("TorrentsController::status", "Getting torrent status with infohash: %s", hash.c_str())
             auto torrent = lh::session().get_torrent(hash);
@@ -164,11 +151,8 @@ class TorrentsController : public lh::Controller {
         info->addResponse<List<Object<FileInfoDto>>>(Status::CODE_200, "application/json");
         info->addResponse<Object<TorrentOperationDto>>(Status::CODE_500, "application/json");
     }
-    ENDPOINT("GET", "/torrents/{infoHash}/files", files,
-        PATH(String, hash_param, "infoHash"),
-        QUERY(String, status_param, "status", "false"),
-        HEADER(String, hostHeader, Header::HOST)
-    ) {
+    ENDPOINT("GET", "/torrents/{infoHash}/files", files, PATH(String, hash_param, "infoHash"),
+             QUERY(String, status_param, "status", "false"), HEADER(String, hostHeader, Header::HOST)) {
         return torrentOperation("TorrentsController::files", hash_param, [&](const std::string &hash) {
             OATPP_LOGI("TorrentsController::files", "Getting torrent files with infohash: %s", hash.c_str())
 
@@ -191,9 +175,7 @@ class TorrentsController : public lh::Controller {
 
         info->pathParams.add<String>("infoHash").description = "Torrent InfoHash";
     }
-    ENDPOINT("GET", "/torrents/{infoHash}/generate", generate,
-        PATH(String, hash_param, "infoHash")
-    ) {
+    ENDPOINT("GET", "/torrents/{infoHash}/generate", generate, PATH(String, hash_param, "infoHash")) {
         return torrentOperation("TorrentsController::generate", hash_param, [&](const std::string &hash) {
             OATPP_LOGI("TorrentsController::generate", "Getting torrent file with infohash: %s", hash.c_str())
             auto tf = lh::session().get_torrent(hash)->generate();

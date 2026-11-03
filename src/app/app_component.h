@@ -6,11 +6,10 @@
 #include "oatpp/web/server/HttpConnectionHandler.hpp"
 #include "oatpp/web/server/HttpRouter.hpp"
 #include "oatpp/web/server/interceptor/AllowCorsGlobal.hpp"
-#include "oatpp/network/tcp/server/ConnectionProvider.hpp"
 
 // #include "oatpp/network/virtual_/client/ConnectionProvider.hpp"
-#include "oatpp/network/virtual_/server/ConnectionProvider.hpp"
 #include "oatpp/network/virtual_/Interface.hpp"
+#include "oatpp/network/virtual_/server/ConnectionProvider.hpp"
 
 #include "oatpp/network/ConnectionPool.hpp"
 
@@ -61,9 +60,8 @@ class AppComponent {
     /**
      *  Create Router component
      */
-    OATPP_CREATE_COMPONENT(std::shared_ptr<oatpp::web::server::HttpRouter>, httpRouter)([] { 
-        return oatpp::web::server::HttpRouter::createShared(); 
-    }());
+    OATPP_CREATE_COMPONENT(std::shared_ptr<oatpp::web::server::HttpRouter>,
+                           httpRouter)([] { return oatpp::web::server::HttpRouter::createShared(); }());
 
     /**
      *  Create ConnectionHandler component which uses Router component to route
@@ -78,7 +76,7 @@ class AppComponent {
         config->headersOutBufferInitial = 16 * 1024;
 
         auto connectionHandler = std::make_shared<oatpp::web::server::HttpConnectionHandler>(router, config);
-        
+
         // Set default error handler
         connectionHandler->setErrorHandler(std::make_shared<lh::ErrorHandler>(objectMapper));
 
@@ -96,4 +94,4 @@ class AppComponent {
     }());
 };
 
-}
+} // namespace lh

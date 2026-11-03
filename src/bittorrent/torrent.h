@@ -98,7 +98,7 @@ class Torrent : public std::enable_shared_from_this<lh::Torrent> {
     // and iterated on the prioritizer thread.
     std::vector<std::shared_ptr<File>> m_files;
     mutable std::mutex m_filesMutex;
-    std::map<std::int64_t, Reader*> m_readers;
+    std::map<std::int64_t, Reader *> m_readers;
     mutable std::mutex m_readersMutex;
 
     // Guards the tracker infos and deadline pieces
@@ -135,7 +135,8 @@ class Torrent : public std::enable_shared_from_this<lh::Torrent> {
     }
 
   public:
-    Torrent(std::shared_ptr<lt::session> nativeSession, const lt::torrent_handle &nativeHandle, lh::storage_type_t st, std::chrono::time_point<std::chrono::system_clock> added_time);
+    Torrent(std::shared_ptr<lt::session> nativeSession, const lt::torrent_handle &nativeHandle, lh::storage_type_t st,
+            std::chrono::time_point<std::chrono::system_clock> added_time);
     ~Torrent();
 
     std::shared_ptr<const TorrentSnapshot> snapshot() const;

@@ -1,4 +1,4 @@
-#pragma once 
+#pragma once
 
 #include "oatpp-swagger/Model.hpp"
 #include "oatpp-swagger/Resources.hpp"
@@ -13,22 +13,20 @@ namespace lh {
  *  http://host:port/swagger/ui
  */
 class SwaggerComponent {
-public:
-  
-  /**
-   *  General API docs info
-   */
-    OATPP_CREATE_COMPONENT(std::shared_ptr<oatpp::swagger::DocumentInfo>, swaggerDocumentInfo)([] {    
+  public:
+    /**
+     *  General API docs info
+     */
+    OATPP_CREATE_COMPONENT(std::shared_ptr<oatpp::swagger::DocumentInfo>, swaggerDocumentInfo)([] {
         oatpp::swagger::DocumentInfo::Builder builder;
-        
+
         std::string uri = "127.0.0.1";
         if (web_interface != "0.0.0.0") {
             uri = web_interface;
         }
         uri = "http://" + uri + ":" + std::to_string(web_port);
 
-        builder
-            .setTitle("lt2http")
+        builder.setTitle("lt2http")
             .setDescription("Libtorrent to HTTP application")
             .setVersion(oatpp::String(lh::VERSION.c_str()))
             .setContactName("elgatito")
@@ -40,19 +38,17 @@ public:
             .addSecurityScheme("basic_auth", oatpp::swagger::DocumentInfo::SecuritySchemeBuilder::DefaultBasicAuthorizationSecurityScheme())
 
             .addServer(uri.c_str(), "lt2http http server");
-        
+
         return builder.build();
-  }());
-  
-  
+    }());
+
     /**
-    *  Swagger-Ui Resources (<oatpp-examples>/lib/oatpp-swagger/res)
-    */
+     *  Swagger-Ui Resources (<oatpp-examples>/lib/oatpp-swagger/res)
+     */
     OATPP_CREATE_COMPONENT(std::shared_ptr<oatpp::swagger::Resources>, swaggerResources)([] {
         // Make sure to specify correct full path to oatpp-swagger/res folder !!!
         return std::shared_ptr<oatpp::swagger::Resources>();
     }());
-  
 };
 
-}
+} // namespace lh

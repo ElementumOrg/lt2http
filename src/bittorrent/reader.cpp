@@ -29,21 +29,13 @@ Reader::~Reader() {
     m_torrent->unregister_reader(m_id);
 }
 
-std::int64_t Reader::id() const {
-    return m_id;
-}
+std::int64_t Reader::id() const { return m_id; }
 
-int Reader::piece_start() const {
-    return m_piece_start;
-}
+int Reader::piece_start() const { return m_piece_start; }
 
-int Reader::piece_end_limit() const {
-    return m_file->piece_end();
-}
+int Reader::piece_end_limit() const { return m_file->piece_end(); }
 
-bool Reader::is_closing() const {
-    return m_isClosing;
-}
+bool Reader::is_closing() const { return m_isClosing; }
 
 oatpp::v_io_size Reader::read(void *buffer, v_buff_size bufferSize, [[maybe_unused]] oatpp::async::Action &action) {
     std::scoped_lock g(m_lock);
@@ -96,8 +88,9 @@ oatpp::v_io_size Reader::read(void *buffer, v_buff_size bufferSize, [[maybe_unus
     if (ret <= 0) {
         OATPP_LOGI("Reader::read", "Empty. Position=%s, n=%d, bs=%d", std::to_string(m_position).c_str(), ret, bufferSize);
     } else if (ret < bufferSize) {
-        OATPP_LOGI("Reader::read", "Not enough. Offset=%s, Position=%s, Start=%d, End=%d, FStart=%d, FEnd=%d, n=%d, bs=%d", 
-            std::to_string(m_offset).c_str(), std::to_string(m_position).c_str(), m_piece_start.load(), m_piece_end, int(m_file->piece_start()), int(m_file->piece_end()), ret, bufferSize);
+        OATPP_LOGI("Reader::read", "Not enough. Offset=%s, Position=%s, Start=%d, End=%d, FStart=%d, FEnd=%d, n=%d, bs=%d",
+                   std::to_string(m_offset).c_str(), std::to_string(m_position).c_str(), m_piece_start.load(), m_piece_end,
+                   int(m_file->piece_start()), int(m_file->piece_end()), ret, bufferSize);
     }
 
     return ret;
@@ -112,7 +105,7 @@ int Reader::piece_from_offset(std::int64_t offset) const {
         return m_file->piece_end();
     if (p < m_file->piece_start())
         return m_file->piece_start();
-        
+
     return p;
 }
 
@@ -139,7 +132,8 @@ void Reader::wait_for_piece(int piece) {
 
         std::this_thread::sleep_for(std::chrono::milliseconds(300));
     }
-    OATPP_LOGI("Reader::wait_for_piece", "Done waiting for piece '%d' in %d ms", piece, std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - now).count());
+    OATPP_LOGI("Reader::wait_for_piece", "Done waiting for piece '%d' in %d ms", piece,
+               std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - now).count());
 }
 
 } // namespace lh

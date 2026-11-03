@@ -30,12 +30,10 @@ bool TorrentSnapshot::have_piece(int piece) const {
     return piece >= 0 && piece < status.pieces.size() && status.pieces.get_bit(lt::piece_index_t{piece});
 }
 
-Torrent::Torrent(std::shared_ptr<lt::session> nativeSession, const lt::torrent_handle &nativeHandle, const lh::storage_type_t st, std::chrono::time_point<std::chrono::system_clock> added_time)
-    : m_nativeSession(std::move(nativeSession))
-    , m_nativeHandle(nativeHandle)
-    , m_storageType(st)
-    , m_hash(to_hex(m_nativeHandle.info_hash()))
-    , m_addedTime(added_time) {
+Torrent::Torrent(std::shared_ptr<lt::session> nativeSession, const lt::torrent_handle &nativeHandle, const lh::storage_type_t st,
+                 std::chrono::time_point<std::chrono::system_clock> added_time)
+    : m_nativeSession(std::move(nativeSession)), m_nativeHandle(nativeHandle), m_storageType(st),
+      m_hash(to_hex(m_nativeHandle.info_hash())), m_addedTime(added_time) {
     auto &config = lh::config();
 
     m_torrentFile = torrent_file(config.torrents_path, m_hash);
@@ -78,8 +76,7 @@ std::vector<std::shared_ptr<File>> Torrent::files() const {
 
 std::shared_ptr<File> Torrent::get_file(int index) {
     std::scoped_lock guard(m_filesMutex);
-    auto match =
-        std::find_if(m_files.begin(), m_files.end(), [&index](const std::shared_ptr<File> &t) { return t->index() == index; });
+    auto match = std::find_if(m_files.begin(), m_files.end(), [&index](const std::shared_ptr<File> &t) { return t->index() == index; });
     if (match == m_files.end())
         throw lh::FileException(Fmt("File with index '%d' not found in torrent with hash '%s'", index, hash().c_str()));
 
@@ -120,9 +117,8 @@ bool Torrent::have_piece(lt::piece_index_t piece) const {
 }
 
 int Torrent::read_piece(lt::iovec_t buffer, lt::piece_index_t piece, int offset, lt::storage_error &ec) const {
-    return with_handle([&](const lt::torrent_handle &) {
-        return m_storage ? m_storage->readv(buffer, piece, offset, lt::open_mode::read_only, ec) : 0;
-    });
+    return with_handle(
+        [&](const lt::torrent_handle &) { return m_storage ? m_storage->readv(buffer, piece, offset, lt::open_mode::read_only, ec) : 0; });
 }
 
 bool Torrent::has_metadata() const { return snapshot()->has_metadata(); }
@@ -289,7 +285,8 @@ TorrentState Torrent::compute_state(const lt::torrent_status &status, bool has_m
 
 bool Torrent::is_buffering() const {
     auto all = files();
-    return std::any_of(all.begin(), all.end(), [](const std::shared_ptr<File> &f) { return f->is_buffering() && f->buffer_progress() < 100; });
+    return std::any_of(all.begin(), all.end(),
+                       [](const std::shared_ptr<File> &f) { return f->is_buffering() && f->buffer_progress() < 100; });
 }
 
 bool Torrent::is_paused() const { return m_isStopped; }
@@ -612,9 +609,10 @@ void Torrent::dump(std::stringstream &ss) {
         if (auto info = tracker_infos.find(tracker.url); scrape_incomplete == -1 && info != tracker_infos.end())
             scrape_incomplete = info->second.numPeers;
 
-        trackers.emplace(tracker.url, Fmt("        %-60s: %-3s seeds, %-3s peers, updating: %-5s, is_working: %-5s, message: %s\n", tracker.url.c_str(),
-                   peer_num_to_string(scrape_complete).c_str(), peer_num_to_string(scrape_incomplete).c_str(),
-                   yes_no(is_updating), yes_no(is_working), message.c_str()));
+        trackers.emplace(tracker.url,
+                         Fmt("        %-60s: %-3s seeds, %-3s peers, updating: %-5s, is_working: %-5s, message: %s\n", tracker.url.c_str(),
+                             peer_num_to_string(scrape_complete).c_str(), peer_num_to_string(scrape_incomplete).c_str(),
+                             yes_no(is_updating), yes_no(is_working), message.c_str()));
     }
 
     // List trackers information sorted by tracker url.
@@ -674,8 +672,8 @@ void Torrent::dump(std::stringstream &ss) {
             ss << "\n        ";
         }
     }
-    ss << Fmt("\n        Readers: <b>%d</b>, Stored: <b>%d</b>, Prioritized: <b>%d</b>",
-                int(reader_positions.size()), total_have, total_prioritized);
+    ss << Fmt("\n        Readers: <b>%d</b>, Stored: <b>%d</b>, Prioritized: <b>%d</b>", int(reader_positions.size()), total_have,
+              total_prioritized);
     ss << "\n\n\n";
     ss << "    " << std::string(150, '*') << "\n";
     ss << "\n\n";

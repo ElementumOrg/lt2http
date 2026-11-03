@@ -11,9 +11,9 @@
 #include <app/application.h>
 
 #include <dto/error.h>
-#include <dto/torrent_add.h>
 #include <dto/session_operation.h>
 #include <dto/session_status.h>
+#include <dto/torrent_add.h>
 
 #include <utils/exceptions.h>
 #include <utils/http_client.h>
@@ -49,8 +49,8 @@ class SessionController : public lh::Controller {
   public:
     explicit SessionController(OATPP_COMPONENT(std::shared_ptr<ObjectMapper>, objectMapper)) : lh::Controller(objectMapper) {}
 
-    static std::shared_ptr<SessionController> createShared(
-        OATPP_COMPONENT(std::shared_ptr<ObjectMapper>, objectMapper) // Inject objectMapper component here as default parameter
+    static std::shared_ptr<SessionController>
+    createShared(OATPP_COMPONENT(std::shared_ptr<ObjectMapper>, objectMapper) // Inject objectMapper component here as default parameter
     ) {
         return std::make_shared<SessionController>(objectMapper);
     }
@@ -63,10 +63,10 @@ class SessionController : public lh::Controller {
     ENDPOINT("GET", "/info", info) {
         std::stringstream ss;
         ss << "<!DOCTYPE html><html lang=\"en-US\"><head>"
-            << "<title>lt2http Status</title>"
-            << R"(<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>)"
-            << R"(<meta http-equiv="refresh" content="30">)"
-            <<  "</head><body>";
+           << "<title>lt2http Status</title>"
+           << R"(<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>)"
+           << R"(<meta http-equiv="refresh" content="30">)"
+           << "</head><body>";
 
         for (const auto &torrent : lh::session().torrents()) {
             ss << "<pre>";
@@ -86,9 +86,8 @@ class SessionController : public lh::Controller {
         info->addResponse<Object<ErrorDto>>(Status::CODE_500, "application/json");
     }
     ENDPOINT("GET", "/status", status) {
-        return operation<ErrorDto>("SessionController::status", [&] {
-            return createDtoResponse(Status::CODE_200, sessionStatusDtoFromSession(lh::session()));
-        });
+        return operation<ErrorDto>("SessionController::status",
+                                   [&] { return createDtoResponse(Status::CODE_200, sessionStatusDtoFromSession(lh::session())); });
     }
 
     ENDPOINT_INFO(resume) {
@@ -132,10 +131,8 @@ class SessionController : public lh::Controller {
         info->addResponse<Object<TorrentAddDto>>(Status::CODE_200, "application/json");
         info->addResponse<Object<TorrentAddDto>>(Status::CODE_500, "application/json");
     }
-    ENDPOINT("POST", "/service/add/file", add_file, 
-            QUERY(String, storage_param, "storage", "automatic"),
-            REQUEST(std::shared_ptr<IncomingRequest>, request)
-    ) {
+    ENDPOINT("POST", "/service/add/file", add_file, QUERY(String, storage_param, "storage", "automatic"),
+             REQUEST(std::shared_ptr<IncomingRequest>, request)) {
         return operation<TorrentAddDto>("SessionController::add_file", [&] {
             auto storage = lh::from_string<lh::storage_type_t, lh::js_storage_type_t_string_struct>(*storage_param);
             auto multipart = std::make_shared<multipart::PartList>(request->getHeaders());
@@ -171,10 +168,8 @@ class SessionController : public lh::Controller {
         info->addResponse<Object<TorrentAddDto>>(Status::CODE_200, "application/json");
         info->addResponse<Object<TorrentAddDto>>(Status::CODE_500, "application/json");
     }
-    ENDPOINT("GET", "/service/add/uri", add_uri, 
-            QUERY(String, uri_param, "uri", ""),
-            QUERY(String, storage_param, "storage", "automatic")
-    ) {
+    ENDPOINT("GET", "/service/add/uri", add_uri, QUERY(String, uri_param, "uri", ""),
+             QUERY(String, storage_param, "storage", "automatic")) {
         return operation<TorrentAddDto>("SessionController::add_uri", [&] {
             auto uri = uri_unescape(*uri_param);
             auto storage = lh::from_string<lh::storage_type_t, lh::js_storage_type_t_string_struct>(*storage_param);

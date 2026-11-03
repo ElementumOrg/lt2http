@@ -6,9 +6,10 @@ namespace lh {
 
 AuthInterceptor::AuthInterceptor() = default;
 
-std::shared_ptr<AuthInterceptor::OutgoingResponse> AuthInterceptor::intercept(const std::shared_ptr<IncomingRequest>& request) {
+std::shared_ptr<AuthInterceptor::OutgoingResponse> AuthInterceptor::intercept(const std::shared_ptr<IncomingRequest> &request) {
     auto const &config = lh::config();
-    auto remoteAddr = request->getConnection()->getInputStreamContext().getProperties().get(oatpp::network::tcp::server::ConnectionProvider::ExtendedConnection::PROPERTY_PEER_ADDRESS);
+    auto remoteAddr = request->getConnection()->getInputStreamContext().getProperties().get(
+        oatpp::network::tcp::server::ConnectionProvider::ExtendedConnection::PROPERTY_PEER_ADDRESS);
 
     if (!config.is_auth_needed() || remoteAddr == "127.0.0.1")
         return nullptr;
@@ -27,4 +28,4 @@ std::shared_ptr<AuthInterceptor::OutgoingResponse> AuthInterceptor::intercept(co
     throw oatpp::web::protocol::http::HttpError(oatpp::web::protocol::http::Status::CODE_401, "Unauthorized", {});
 }
 
-}
+} // namespace lh

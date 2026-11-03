@@ -8,9 +8,9 @@
 
 #include <oatpp/network/Server.hpp>
 
-#include <boost/stacktrace.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/program_options/parsers.hpp>
+#include <boost/stacktrace.hpp>
 
 namespace {
 
@@ -50,7 +50,7 @@ int run(int argc, char *argv[], std::ostream &out) {
     return code;
 }
 
-}  // namespace
+} // namespace
 
 #ifdef LT2HTTP_LIBRARY
 

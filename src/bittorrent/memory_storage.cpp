@@ -26,7 +26,7 @@ memory_storage::memory_storage(lt::storage_params const &params)
     piece_length = m_files.piece_length();
 
     OATPP_LOGI("memory_storage", "Creating memory storage with size: %s, Pieces count: %d, Piece size: %s",
-                humanize_bytes(capacity).c_str(), piece_count, humanize_bytes(piece_length).c_str());
+               humanize_bytes(capacity).c_str(), piece_count, humanize_bytes(piece_length).c_str());
 
     for (int i = 0; i < piece_count; i++) {
         pieces.emplace_back(i, m_files.piece_size(lt::piece_index_t(i)));
@@ -34,8 +34,7 @@ memory_storage::memory_storage(lt::storage_params const &params)
 
     buffer_size = buffers_for_capacity();
     buffer_limit = buffer_size;
-    OATPP_LOGI("memory_storage", "Using %s memory for %d buffer items", humanize_bytes(buffer_size * piece_length).c_str(),
-                buffer_size);
+    OATPP_LOGI("memory_storage", "Using %s memory for %d buffer items", humanize_bytes(buffer_size * piece_length).c_str(), buffer_size);
 
     reader_pieces.resize(piece_count + 10);
     reserved_pieces.resize(piece_count + 10);
@@ -71,8 +70,7 @@ void memory_storage::set_memory_size(std::int64_t s) {
     buffer_size = buffers_for_capacity();
     buffer_limit = buffer_size;
     if (prev_buffer_size == buffer_size) {
-        OATPP_LOGI("memory_storage::set_memory_size", "Not increasing buffer due to same size (%s)",
-                    humanize_bytes(buffer_size).c_str());
+        OATPP_LOGI("memory_storage::set_memory_size", "Not increasing buffer due to same size (%s)", humanize_bytes(buffer_size).c_str());
         return;
     }
 
@@ -83,12 +81,10 @@ void memory_storage::set_memory_size(std::int64_t s) {
     }
 }
 
-int memory_storage::get_buffers_count() const {
-    return buffer_size - int(reserved_pieces.count());
-}
+int memory_storage::get_buffers_count() const { return buffer_size - int(reserved_pieces.count()); }
 
-int memory_storage::readv(lt::span<lt::iovec_t const> bufs, lt::piece_index_t const pi, int offset, lt::open_mode_t  /*mode*/,
-            lt::storage_error & /*ec*/) {
+int memory_storage::readv(lt::span<lt::iovec_t const> bufs, lt::piece_index_t const pi, int offset, lt::open_mode_t /*mode*/,
+                          lt::storage_error & /*ec*/) {
     if (!is_initialized)
         return 0;
 
@@ -116,8 +112,7 @@ int memory_storage::readv(lt::span<lt::iovec_t const> bufs, lt::piece_index_t co
 
     if (is_logging) {
         OATPP_LOGI("memory_storage::readv", "readv out p: %d, pl: %d, bufs: %d/%d, off: %d, bs: %d, res: %d=%d", piece,
-                    pieces[piece].length, bufs.size(), bufs[0].size(), offset, buffers[pieces[piece].bi].buffer.size(), size,
-                    n);
+                   pieces[piece].length, bufs.size(), bufs[0].size(), offset, buffers[pieces[piece].bi].buffer.size(), size, n);
     }
 
     if (pieces[piece].is_completed && offset + n >= pieces[piece].size) {
@@ -129,8 +124,8 @@ int memory_storage::readv(lt::span<lt::iovec_t const> bufs, lt::piece_index_t co
     return n;
 }
 
-int memory_storage::writev(lt::span<lt::iovec_t const> bufs, lt::piece_index_t const pi, int offset, lt::open_mode_t  /*mode*/,
-            lt::storage_error & /*ec*/) {
+int memory_storage::writev(lt::span<lt::iovec_t const> bufs, lt::piece_index_t const pi, int offset, lt::open_mode_t /*mode*/,
+                           lt::storage_error & /*ec*/) {
     auto piece = static_cast<int>(pi);
     if (is_logging) {
         OATPP_LOGI("memory_storage::writev", "writev in  p: %d, off: %d, bufs: %d", piece, offset, bufs.size());
@@ -161,9 +156,8 @@ int memory_storage::writev(lt::span<lt::iovec_t const> bufs, lt::piece_index_t c
     }
 
     if (is_logging) {
-        OATPP_LOGI("memory_storage::writev", "writev out p: %d, pl: %d, bufs: %d / %d, req: %d, off: %d, bs: %d, res: %d=%d",
-                    piece, pieces[piece].length, bufs.size(), bufs[0].size(), size, offset,
-                    buffers[pieces[piece].bi].buffer.size(), size, n);
+        OATPP_LOGI("memory_storage::writev", "writev out p: %d, pl: %d, bufs: %d / %d, req: %d, off: %d, bs: %d, res: %d=%d", piece,
+                   pieces[piece].length, bufs.size(), bufs[0].size(), size, offset, buffers[pieces[piece].bi].buffer.size(), size, n);
     }
 
     pieces[piece].size += n;
@@ -182,8 +176,8 @@ lt::status_t memory_storage::move_storage(std::string const & /*save_path*/, lt:
     return lt::status_t::no_error;
 }
 
-bool memory_storage::verify_resume_data(lt::add_torrent_params const & /*rd*/, lt::aux::vector<std::string, lt::file_index_t> const & /*links*/,
-                        lt::storage_error & /*ec*/) {
+bool memory_storage::verify_resume_data(lt::add_torrent_params const & /*rd*/,
+                                        lt::aux::vector<std::string, lt::file_index_t> const & /*links*/, lt::storage_error & /*ec*/) {
     return false;
 }
 
@@ -193,7 +187,7 @@ void memory_storage::delete_files(lt::remove_flags_t /*options*/, lt::storage_er
 
 bool memory_storage::has_any_file(lt::storage_error & /*ec*/) { return false; }
 
-void memory_storage::set_torrent_handle(const lt::torrent_handle& th) {
+void memory_storage::set_torrent_handle(const lt::torrent_handle &th) {
     m_torrent = th;
     m_handle = th.native_handle();
 
@@ -261,8 +255,8 @@ void memory_storage::trim(int pi) {
 
     while (buffer_used >= buffer_limit) {
         if (is_logging) {
-            OATPP_LOGI("memory_storage::trim", "Trimming %d to %d with reserved %d, %s", buffer_used, buffer_limit,
-                        buffer_reserved, get_buffer_info().c_str());
+            OATPP_LOGI("memory_storage::trim", "Trimming %d to %d with reserved %d, %s", buffer_used, buffer_limit, buffer_reserved,
+                       get_buffer_info().c_str());
         }
 
         if (!reader_pieces.empty()) {
@@ -345,7 +339,7 @@ void memory_storage::enable_logging() { is_logging = true; }
 
 void memory_storage::disable_logging() { is_logging = false; }
 
-void memory_storage::update_reader_pieces(const std::vector<int>& pieces) {
+void memory_storage::update_reader_pieces(const std::vector<int> &pieces) {
     if (!is_initialized)
         return;
 
@@ -356,7 +350,7 @@ void memory_storage::update_reader_pieces(const std::vector<int>& pieces) {
     }
 }
 
-void memory_storage::update_reserved_pieces(const std::vector<int>& pieces) {
+void memory_storage::update_reserved_pieces(const std::vector<int> &pieces) {
     if (!is_initialized)
         return;
 
@@ -388,8 +382,8 @@ bool memory_storage::is_readered(int index) {
     return m_handle->piece_priority(lt::piece_index_t(index)) != lt::download_priority_t(0);
 }
 
-lt::storage_interface* memory_storage_constructor(lt::storage_params const &params, lt::file_pool & /*unused*/) {
+lt::storage_interface *memory_storage_constructor(lt::storage_params const &params, lt::file_pool & /*unused*/) {
     return new memory_storage(params);
 }
 
-}
+} // namespace lh

@@ -1,7 +1,7 @@
 #pragma once
 
-#include "oatpp/core/macro/codegen.hpp"
 #include "oatpp/core/Types.hpp"
+#include "oatpp/core/macro/codegen.hpp"
 
 #include "torrent_status.h"
 
@@ -13,29 +13,19 @@ class TorrentInfoDto : public oatpp::DTO {
 
     DTO_INIT(TorrentInfoDto, DTO)
 
-    DTO_FIELD_INFO(hash) {
-        info->description = "Torrent hash";
-    }
+    DTO_FIELD_INFO(hash) { info->description = "Torrent hash"; }
     DTO_FIELD(String, hash);
 
-    DTO_FIELD_INFO(name) {
-        info->description = "Name of a torrent file";
-    }
+    DTO_FIELD_INFO(name) { info->description = "Name of a torrent file"; }
     DTO_FIELD(String, name);
 
-    DTO_FIELD_INFO(size) {
-        info->description = "Total torrent size (bytes)";
-    }
+    DTO_FIELD_INFO(size) { info->description = "Total torrent size (bytes)"; }
     DTO_FIELD(Int64, size);
 
-    DTO_FIELD_INFO(has_metadata) {
-        info->description = "Does this torrent have metadata (bool)";
-    }
+    DTO_FIELD_INFO(has_metadata) { info->description = "Does this torrent have metadata (bool)"; }
     DTO_FIELD(Boolean, has_metadata);
 
-    DTO_FIELD_INFO(is_memory_storage) {
-        info->description = "Does this torrent run with memory storage (bool)";
-    }
+    DTO_FIELD_INFO(is_memory_storage) { info->description = "Does this torrent run with memory storage (bool)"; }
     DTO_FIELD(Boolean, is_memory_storage);
 
     DTO_FIELD(Object<TorrentStatusDto>, torrent_status);
@@ -43,7 +33,7 @@ class TorrentInfoDto : public oatpp::DTO {
 
 #include OATPP_CODEGEN_END(DTO)
 
-inline oatpp::Object<TorrentInfoDto> torrentInfoDtoFromTorrent(const std::shared_ptr<lh::Torrent>& torrent, bool is_status) {
+inline oatpp::Object<TorrentInfoDto> torrentInfoDtoFromTorrent(const std::shared_ptr<lh::Torrent> &torrent, bool is_status) {
     auto dto = TorrentInfoDto::createShared();
 
     dto->hash = torrent->hash();

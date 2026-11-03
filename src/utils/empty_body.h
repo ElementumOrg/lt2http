@@ -1,24 +1,24 @@
 #pragma once
 
-#include "oatpp/web/protocol/http/outgoing/Body.hpp"
 #include "oatpp/web/protocol/http/Http.hpp"
+#include "oatpp/web/protocol/http/outgoing/Body.hpp"
 
 namespace oatpp::web::protocol::http::outgoing {
 
 class EmptyBody : public Body {
-private:
-  v_int64 m_size;
-public:
-  EmptyBody(const v_int64& sz);
+  private:
+    v_int64 m_size;
 
-  v_io_size read(void *buffer, v_buff_size count, async::Action& action) override;
+  public:
+    EmptyBody(const v_int64 &sz);
 
-  void declareHeaders(Headers& headers) override;
+    v_io_size read(void *buffer, v_buff_size count, async::Action &action) override;
 
-  p_char8 getKnownData() override;
+    void declareHeaders(Headers &headers) override;
 
-  v_int64 getKnownSize() override;
-  
+    p_char8 getKnownData() override;
+
+    v_int64 getKnownSize() override;
 };
-  
-}
+
+} // namespace oatpp::web::protocol::http::outgoing

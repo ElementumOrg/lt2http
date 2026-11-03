@@ -20,12 +20,12 @@
 static int failures = 0;
 
 // Not assert(): it is compiled out in release builds
-#define CHECK(expr)                                                                                                                  \
-    do {                                                                                                                             \
-        if (!(expr)) {                                                                                                               \
-            std::fprintf(stderr, "%s:%d: CHECK(%s) failed\n", __FILE__, __LINE__, #expr);                                            \
-            failures++;                                                                                                              \
-        }                                                                                                                            \
+#define CHECK(expr)                                                                                                                        \
+    do {                                                                                                                                   \
+        if (!(expr)) {                                                                                                                     \
+            std::fprintf(stderr, "%s:%d: CHECK(%s) failed\n", __FILE__, __LINE__, #expr);                                                  \
+            failures++;                                                                                                                    \
+        }                                                                                                                                  \
     } while (0)
 
 static void test_changelog() {

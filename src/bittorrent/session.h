@@ -66,7 +66,8 @@ class Session {
     void load_trackers();
 
     std::vector<std::shared_ptr<Torrent>> torrents();
-    std::shared_ptr<Torrent> add_torrent(std::string uri, bool is_paused, lh::storage_type_t st, bool is_first_time, std::chrono::time_point<std::chrono::system_clock> added_time);
+    std::shared_ptr<Torrent> add_torrent(std::string uri, bool is_paused, lh::storage_type_t st, bool is_first_time,
+                                         std::chrono::time_point<std::chrono::system_clock> added_time);
     std::shared_ptr<Torrent> get_torrent(const std::string &hash) const;
     // Returns nullptr if the torrent is not found.
     std::shared_ptr<Torrent> find_torrent(const std::string &hash) const;

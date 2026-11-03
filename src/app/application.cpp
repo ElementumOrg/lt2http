@@ -10,35 +10,29 @@
 
 #include <web/files.h>
 #include <web/misc.h>
-#include <web/settings.h>
 #include <web/session.h>
+#include <web/settings.h>
 #include <web/stream.h>
 #include <web/swagger.h>
 #include <web/torrents.h>
 
 namespace lh {
 
-Application::Application(int &argc, char *argv[])
-    : m_config(argc, argv)
-    , m_session(m_config) {}
+Application::Application(int &argc, char *argv[]) : m_config(argc, argv), m_session(m_config) {}
 
 Application::~Application() = default;
 
-lh::Config& Application::config() {
-    return m_config;
-}
+lh::Config &Application::config() { return m_config; }
 
-lh::Session& Application::session() {
-    return m_session;
-}
+lh::Session &Application::session() { return m_session; }
 
 void Application::run() {
     lh::web_interface = m_config.web_interface;
     lh::web_port = m_config.web_port;
 
     if (!m_config.web_login.empty() || !m_config.web_password.empty()) {
-        OATPP_LOGI("Application::run", "Initializing Web Server on http://%s:%d with authentication for %s:%s", 
-            web_interface.c_str(), web_port, m_config.web_login.c_str(), m_config.web_password.c_str());
+        OATPP_LOGI("Application::run", "Initializing Web Server on http://%s:%d with authentication for %s:%s", web_interface.c_str(),
+                   web_port, m_config.web_login.c_str(), m_config.web_password.c_str());
     } else {
         OATPP_LOGI("Application::run", "Initializing Web Server on http://%s:%d", web_interface.c_str(), web_port);
     }
@@ -66,9 +60,7 @@ void Application::run() {
     /* Create server which takes provided TCP connections and passes them to HTTP connection handler */
     oatpp::network::Server server(connectionProvider, connectionHandler);
 
-    std::function<bool()> condition = [](){
-        return !lh::is_closing.load();
-    };
+    std::function<bool()> condition = []() { return !lh::is_closing.load(); };
 
     // Loads trackers and previous torrents in a session thread.
     m_session.run();
@@ -89,14 +81,12 @@ void Application::run() {
     std::this_thread::sleep_for(std::chrono::seconds(1));
 }
 
-void Application::close() {
-    m_session.close();
-}
+void Application::close() { m_session.close(); }
 
-}
+} // namespace lh
 
 // Custom signal handler to print stacktrace and exit gracefully.
-void signalHandler( int signum ) {
+void signalHandler(int signum) {
     OATPP_LOGE("Application::signalHandler", "Got interrupt signal (%d). Stopping application gracefully", signum);
     lh::set_close(true);
 

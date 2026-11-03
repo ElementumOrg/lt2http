@@ -19,10 +19,10 @@
 
 namespace lh {
 
-File::File(Torrent* torrent, lt::file_index_t index, std::string file_path, std::string file_name,
-           std::int64_t file_size, std::int64_t file_offset, lt::download_priority_t priority)
-    : m_torrent(torrent), m_index(index), m_path(std::move(file_path)), m_name(std::move(file_name)),
-      m_size(file_size), m_offset(file_offset) {
+File::File(Torrent *torrent, lt::file_index_t index, std::string file_path, std::string file_name, std::int64_t file_size,
+           std::int64_t file_offset, lt::download_priority_t priority)
+    : m_torrent(torrent), m_index(index), m_path(std::move(file_path)), m_name(std::move(file_name)), m_size(file_size),
+      m_offset(file_offset) {
     auto const &config = lh::config();
 
     m_start_buffer_size = std::int64_t(config.buffer_size) * 1024 * 1024;

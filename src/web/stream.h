@@ -2,9 +2,9 @@
 
 #include <memory>
 
+#include "oatpp-swagger/Types.hpp"
 #include "oatpp/core/macro/codegen.hpp"
 #include "oatpp/parser/json/mapping/ObjectMapper.hpp"
-#include "oatpp-swagger/Types.hpp"
 
 #include <libtorrent/download_priority.hpp>
 
@@ -65,8 +65,8 @@ class StreamController : public lh::Controller {
                 auto body = std::make_shared<oatpp::web::protocol::http::outgoing::StreamBody>(reader, range.end - range.start + 1);
                 response = OutgoingResponse::createShared(Status::CODE_206, body);
 
-                oatpp::web::protocol::http::ContentRange contentRange(oatpp::web::protocol::http::ContentRange::UNIT_BYTES,
-                                                                      range.start, range.end, file->size(), true);
+                oatpp::web::protocol::http::ContentRange contentRange(oatpp::web::protocol::http::ContentRange::UNIT_BYTES, range.start,
+                                                                      range.end, file->size(), true);
                 response->putHeader(Header::CONTENT_RANGE, contentRange.toString());
             }
 
@@ -87,8 +87,8 @@ class StreamController : public lh::Controller {
   public:
     explicit StreamController(OATPP_COMPONENT(std::shared_ptr<ObjectMapper>, objectMapper)) : lh::Controller(objectMapper) {}
 
-    static std::shared_ptr<StreamController> createShared(
-        OATPP_COMPONENT(std::shared_ptr<ObjectMapper>, objectMapper) // Inject objectMapper component here as default parameter
+    static std::shared_ptr<StreamController>
+    createShared(OATPP_COMPONENT(std::shared_ptr<ObjectMapper>, objectMapper) // Inject objectMapper component here as default parameter
     ) {
         return std::make_shared<StreamController>(objectMapper);
     }
@@ -102,11 +102,8 @@ class StreamController : public lh::Controller {
         info->addResponse<oatpp::swagger::Binary>(Status::CODE_200, "application/octet-stream");
         info->addResponse<Object<FileOperationDto>>(Status::CODE_500, "application/json");
     }
-    ENDPOINT("HEAD", "/torrents/{infoHash}/files/{index}/stream/{file_name}", stream_head, 
-            PATH(String, hash_param, "infoHash"),
-            PATH(String, index_param, "index"),
-            REQUEST(std::shared_ptr<IncomingRequest>, request)
-    ) {
+    ENDPOINT("HEAD", "/torrents/{infoHash}/files/{index}/stream/{file_name}", stream_head, PATH(String, hash_param, "infoHash"),
+             PATH(String, index_param, "index"), REQUEST(std::shared_ptr<IncomingRequest>, request)) {
         return streamFile(hash_param, index_param, request);
     }
 
@@ -119,11 +116,8 @@ class StreamController : public lh::Controller {
         info->addResponse<oatpp::swagger::Binary>(Status::CODE_206, "application/octet-stream");
         info->addResponse<Object<FileOperationDto>>(Status::CODE_500, "application/json");
     }
-    ENDPOINT("GET", "/torrents/{infoHash}/files/{index}/stream/{file_name}", stream, 
-            PATH(String, hash_param, "infoHash"),
-            PATH(String, index_param, "index"),
-            REQUEST(std::shared_ptr<IncomingRequest>, request)
-    ) {
+    ENDPOINT("GET", "/torrents/{infoHash}/files/{index}/stream/{file_name}", stream, PATH(String, hash_param, "infoHash"),
+             PATH(String, index_param, "index"), REQUEST(std::shared_ptr<IncomingRequest>, request)) {
         return streamFile(hash_param, index_param, request);
     }
 };

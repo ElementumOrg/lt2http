@@ -19,4 +19,4 @@ class CustomLogger : public oatpp::base::Logger {
     void log(v_uint32 priority, const std::string &tag, const std::string &message) override;
 };
 
-}
+} // namespace lh

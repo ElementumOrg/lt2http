@@ -36,6 +36,7 @@ using clk = std::chrono::steady_clock;
 namespace lh {
 
 const char *const extraTrackersURLTemplate = "https://ngosang.github.io/trackerslist/trackers_%s.txt";
+// clang-format off
 const std::vector<std::string> defaultTrackers = {
     "http://bt.t-ru.org/ann",
     "http://bt2.t-ru.org/ann",
@@ -72,6 +73,7 @@ const std::vector<std::string> defaultTrackers = {
     "udp://torrent.by:2710",
     "udp://tracker.cortexlabs.ai:5008"
 };
+// clang-format on
 
 Session::Session(lh::Config &config) : m_config(config) {
     OATPP_LOGI("Session", "Starting libtorrent session");
@@ -323,12 +325,13 @@ void Session::configure() {
 
     OATPP_LOGI("Session::configure", "DownloadStorage: %s", storage_to_string(m_config.download_storage))
     if (is_memory_storage()) {
-        std::int64_t need_size = std::int64_t(m_config.buffer_size) * 1024 * 1024 + std::int64_t(m_config.end_buffer_size) * 1024 * 1024 + 8 * 1024 * 1024;
+        std::int64_t need_size =
+            std::int64_t(m_config.buffer_size) * 1024 * 1024 + std::int64_t(m_config.end_buffer_size) * 1024 * 1024 + 8 * 1024 * 1024;
         std::int64_t msize = memory_size();
 
         if (msize < need_size) {
-            OATPP_LOGI("Session::configure", "Raising memory size (from %s) to fit all the buffer (to %s)",
-                       humanize_bytes(msize).c_str(), humanize_bytes(need_size).c_str())
+            OATPP_LOGI("Session::configure", "Raising memory size (from %s) to fit all the buffer (to %s)", humanize_bytes(msize).c_str(),
+                       humanize_bytes(need_size).c_str())
             msize = need_size;
             m_config.memory_size = msize / 1024 / 1024;
         }
@@ -409,7 +412,7 @@ void Session::reconfigure() {
     OATPP_LOGI("Session::reconfigure", "Reconfiguring libtorrent session");
     m_config = lh::config();
     configure();
-    
+
     // Apply settings
     m_nativeSession->apply_settings(m_pack);
 }
@@ -603,13 +606,8 @@ void Session::load_previous_torrents() {
     for (const auto &[modified, file] : entries) {
         std::string path = file.string();
         try {
-            add_torrent(
-                path, 
-                m_config.autoload_torrents_paused, 
-                lh::storage_type_t::file, 
-                false, 
-                std::chrono::system_clock::from_time_t(modtime_file(path))
-            );
+            add_torrent(path, m_config.autoload_torrents_paused, lh::storage_type_t::file, false,
+                        std::chrono::system_clock::from_time_t(modtime_file(path)));
         } catch (std::exception &e) {
             OATPP_LOGE("Session::load_previous_torrents", "Failed to load torrent '%s': %s", path.c_str(), e.what());
         }
@@ -655,8 +653,8 @@ void Session::load_trackers() {
     use_trackers();
 }
 
-std::shared_ptr<Torrent> Session::add_torrent(std::string uri, bool is_paused, lh::storage_type_t st, 
-    bool is_first_time, std::chrono::time_point<std::chrono::system_clock> added_time) {
+std::shared_ptr<Torrent> Session::add_torrent(std::string uri, bool is_paused, lh::storage_type_t st, bool is_first_time,
+                                              std::chrono::time_point<std::chrono::system_clock> added_time) {
     // Trim whitespaces
     boost::trim(uri);
     if (uri.empty())
@@ -699,8 +697,7 @@ std::shared_ptr<Torrent> Session::add_torrent(std::string uri, bool is_paused, l
         // Magnet link
         lt::parse_magnet_uri(uri, p, ec);
         if (ec) {
-            OATPP_LOGI("Session::add_torrent", "Failed to load torrent file with magnet '%s': %s", uri.c_str(),
-                       ec.message().c_str());
+            OATPP_LOGI("Session::add_torrent", "Failed to load torrent file with magnet '%s': %s", uri.c_str(), ec.message().c_str());
             throw lh::Exception(ec.message());
         }
         hash = to_hex(p.info_hash);
@@ -710,8 +707,7 @@ std::shared_ptr<Torrent> Session::add_torrent(std::string uri, bool is_paused, l
 
         remove_temporary_file(uri);
         if (ec) {
-            OATPP_LOGI("Session::add_torrent", "Failed to load torrent file with path '%s': %s", uri.c_str(),
-                       ec.message().c_str());
+            OATPP_LOGI("Session::add_torrent", "Failed to load torrent file with path '%s': %s", uri.c_str(), ec.message().c_str());
             throw lh::Exception(ec.message());
         }
 
@@ -762,14 +758,12 @@ std::shared_ptr<Torrent> Session::add_torrent(std::string uri, bool is_paused, l
 
     OATPP_LOGD("Session::add_torrent", "Loaded torrent has %d trackers", p.trackers.size());
     auto is_private = p.ti ? p.ti->priv() : false;
-    if (!is_private 
-        && ((m_config.modify_trackers_strategy == lh::modify_trackers_t::first_time && is_first_time) 
-            || m_config.modify_trackers_strategy == lh::modify_trackers_t::each_time)
-    ) {
+    if (!is_private && ((m_config.modify_trackers_strategy == lh::modify_trackers_t::first_time && is_first_time) ||
+                        m_config.modify_trackers_strategy == lh::modify_trackers_t::each_time)) {
         // Remove original trackers if configured so
         if (m_config.remove_original_trackers)
             p.trackers.clear();
-        
+
         // Add trackers to torrent info
         std::scoped_lock guard(m_extraTrackersMutex);
         for (const auto &tracker : m_extraTrackers) {
@@ -836,7 +830,8 @@ bool Session::remove_torrent(const std::string &hash, bool is_delete_files, bool
     std::shared_ptr<Torrent> torrent;
     {
         std::scoped_lock guard(m_torrentsMutex);
-        auto match = std::find_if(m_torrents.begin(), m_torrents.end(), [&hash](const std::shared_ptr<Torrent> &t) { return t->hash() == hash; });
+        auto match =
+            std::find_if(m_torrents.begin(), m_torrents.end(), [&hash](const std::shared_ptr<Torrent> &t) { return t->hash() == hash; });
         if (match == m_torrents.end())
             throw lh::TorrentException(Fmt("Torrent with hash '%s' not found", hash.c_str()));
         torrent = *match;
@@ -886,7 +881,7 @@ int Session::get_max_connections() {
     int cpu = int(std::thread::hardware_concurrency());
     if (cpu <= 1)
         return 30;
-    
+
     return 75;
 }
 
@@ -947,15 +942,9 @@ void Session::trigger_resume_data() {
 
 std::int64_t Session::memory_size() const { return std::int64_t(m_config.memory_size) * 1024 * 1024; }
 
-bool Session::is_paused() const {
-    return m_nativeSession->is_paused();
-}
+bool Session::is_paused() const { return m_nativeSession->is_paused(); }
 
-void Session::pause() {
-    m_nativeSession->pause();
-}
-void Session::resume() {
-    m_nativeSession->resume();
-}
+void Session::pause() { m_nativeSession->pause(); }
+void Session::resume() { m_nativeSession->resume(); }
 
 } // namespace lh

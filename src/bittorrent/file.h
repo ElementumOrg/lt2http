@@ -20,7 +20,7 @@ class Torrent;
 
 class File {
   private:
-    Torrent* m_torrent;
+    Torrent *m_torrent;
 
     lt::file_index_t m_index = 0;
     std::string m_path;
@@ -42,7 +42,7 @@ class File {
     std::int64_t m_end_buffer_size = 0;
 
   public:
-    File(Torrent* torrent, lt::file_index_t index, std::string file_path, std::string file_name, std::int64_t file_size,
+    File(Torrent *torrent, lt::file_index_t index, std::string file_path, std::string file_name, std::int64_t file_size,
          std::int64_t file_offset, lt::download_priority_t priority);
     ~File();
 

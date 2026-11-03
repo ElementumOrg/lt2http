@@ -7,9 +7,9 @@
 #include <libtorrent/download_priority.hpp>
 #include <libtorrent/error_code.hpp>
 
-#include <oatpp/web/protocol/http/outgoing/StreamingBody.hpp>
 #include <oatpp/core/Types.hpp>
 #include <oatpp/core/base/Environment.hpp>
+#include <oatpp/web/protocol/http/outgoing/StreamingBody.hpp>
 
 #include <app/config.h>
 
