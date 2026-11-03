@@ -1,74 +1,55 @@
 #pragma once
 
-#include <memory>
+#include <cstdio>
 #include <random>
-#include <sstream>
 #include <stdexcept>
 #include <string>
-#include <vector>
 
-#include "libtorrent/aux_/escape_string.hpp"
-#include "libtorrent/sha1_hash.hpp"
+#include <libtorrent/aux_/escape_string.hpp>
+#include <libtorrent/hex.hpp>
+#include <libtorrent/sha1_hash.hpp>
 
 template <typename... Args> std::string Fmt(const std::string &format, Args... args) {
-    int size = snprintf(nullptr, 0, format.c_str(), args...) + 1;
-    if (size <= 0) {
+    int size = snprintf(nullptr, 0, format.c_str(), args...);
+    if (size < 0)
         throw std::runtime_error("Error during formatting");
-    }
-    std::unique_ptr<char[]> buf(new char[size]);
-    snprintf(buf.get(), size, format.c_str(), args...);
-    return std::string(buf.get(), buf.get() + size - 1);
+
+    std::string result(size, '\0');
+    snprintf(&result[0], size + 1, format.c_str(), args...);
+    return result;
 }
 
-template <typename T> std::string join(const T &v, const std::string &delim) {
-    std::ostringstream s;
-    for (const auto &i : v) {
-        if (&i != &v[0]) {
-            s << delim;
-        }
-        s << i;
+template <typename T> std::string join(const T &values, const std::string &delim) {
+    std::string result;
+    for (const auto &value : values) {
+        if (!result.empty())
+            result += delim;
+        result += value;
     }
-    return s.str();
+    return result;
 }
 
-inline std::string uri_escape(const std::string& input) { return lt::escape_string(boost::string_view(input.c_str(), input.size())); }
+inline std::string uri_escape(const std::string &input) { return lt::escape_string(input); }
 
-inline std::string uri_unescape(const std::string& input) {
+inline std::string uri_unescape(const std::string &input) {
     lt::error_code ec;
-    return lt::unescape_string(boost::string_view(input.c_str(), input.size()), ec);
+    return lt::unescape_string(input, ec);
 }
 
-inline std::string to_hex(lt::sha1_hash const &s) {
-    std::stringstream ret;
-    ret << s;
-    return ret.str();
-}
+inline std::string to_hex(lt::sha1_hash const &s) { return lt::aux::to_hex(s); }
 
 inline std::string get_random_numeric(int size) {
-    std::string possible_characters = "0123456789";
-    std::random_device rd;
-    std::mt19937 engine(rd());
-    std::uniform_int_distribution<> dist(0, possible_characters.size() - 1);
-    std::string ret;
-    for (int i = 0; i < size; i++) {
-        int random_index = dist(engine);
-        ret += possible_characters[random_index];
-    }
-    return ret;
+    thread_local std::mt19937 engine{std::random_device{}()};
+    std::uniform_int_distribution<int> digit(0, 9);
+    std::string result;
+    for (int i = 0; i < size; i++)
+        result += char('0' + digit(engine));
+    return result;
 }
 
-inline std::string peer_num_to_string(int num) {
-    if (num <= 0)
-        return "-";
-
-    return std::to_string(num);
-}
+inline std::string peer_num_to_string(int num) { return num <= 0 ? "-" : std::to_string(num); }
 
 inline std::string get_file_ext(const std::string &s) {
-    std::size_t i = s.rfind('.', s.length());
-    if (i != std::string::npos) {
-        return (s.substr(i + 1, s.length() - i));
-    }
-
-    return ("");
+    auto i = s.rfind('.');
+    return i == std::string::npos ? "" : s.substr(i + 1);
 }

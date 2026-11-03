@@ -5,15 +5,14 @@
 #define CPPHTTPLIB_OPENSSL_SUPPORT
 #include "httplib.h"
 
-#include <utils/http_url.h>
-#include <utils/strings.h>
-
 inline httplib::Result do_request(const std::string &uri) {
-    HTTPURL u(uri);
-    std::string req_path = u.path + "?" + u.query;
+    // httplib takes "scheme://host:port" and the path separately.
+    auto scheme_end = uri.find("://");
+    auto path_start = uri.find('/', scheme_end == std::string::npos ? 0 : scheme_end + 3);
+    auto path = path_start == std::string::npos ? "/" : uri.substr(path_start);
 
-    httplib::Client cli(Fmt("%s://%s:%d", u.protocol.c_str(), u.domain.c_str(), u.port).c_str());
-    
+    httplib::Client cli(uri.substr(0, path_start));
+
     cli.enable_server_certificate_verification(false);
     cli.set_follow_location(true);
     cli.set_compress(true);
@@ -21,5 +20,5 @@ inline httplib::Result do_request(const std::string &uri) {
     cli.set_connection_timeout(10);
     cli.set_read_timeout(30);
 
-    return cli.Get(req_path.c_str());
+    return cli.Get(path.substr(0, path.find('#')).c_str());
 }

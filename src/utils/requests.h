@@ -1,29 +1,17 @@
 #pragma once
 
+#include <map>
+#include <string>
+
 #include "strings.h"
 
-std::string guess_mime_type(const std::string &file) {
-    auto ext = get_file_ext(file);
-    if (ext == "mp4")
-        return "video/mp4";
-    else if (ext == "m4v")
-        return "video/x-m4v";
-    else if (ext == "mkv")
-        return "video/x-matroska";
-    else if (ext == "webm")
-        return "video/webm";
-    else if (ext == "mov")
-        return "video/quicktime";
-    else if (ext == "avi")
-        return "video/x-msvideo";
-    else if (ext == "wmv")
-        return "video/x-ms-wmv";
-    else if (ext == "mpg")
-        return "video/mpeg";
-    else if (ext == "flv")
-        return "video/x-flv";
-    else if (ext == "3gp")
-        return "video/3gpp";
+inline std::string guess_mime_type(const std::string &file) {
+    static const std::map<std::string, std::string> types = {
+        {"mp4", "video/mp4"},        {"m4v", "video/x-m4v"},     {"mkv", "video/x-matroska"}, {"webm", "video/webm"},
+        {"mov", "video/quicktime"},  {"avi", "video/x-msvideo"}, {"wmv", "video/x-ms-wmv"},   {"mpg", "video/mpeg"},
+        {"flv", "video/x-flv"},      {"3gp", "video/3gpp"},
+    };
 
-    return "";
+    auto type = types.find(get_file_ext(file));
+    return type == types.end() ? "" : type->second;
 }

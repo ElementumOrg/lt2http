@@ -1,59 +1,33 @@
 #pragma once
 
-#include <iostream>
+#include <cmath>
+#include <cstdint>
 #include <random>
-#include <sstream>
-#include <vector>
-#include <ctime>
+#include <string>
 
-inline int random(int min, int max) // range : [min, max]
-{
-    static bool first = true;
-    if (first) {
-        srand(time(nullptr)); // seeding for the first time only!
-        first = false;
-    }
-    return min + rand() % ((max + 1) - min);
+// Random number in [min, max].
+inline int random(int min, int max) {
+    thread_local std::mt19937 engine{std::random_device{}()};
+    return std::uniform_int_distribution<int>(min, max)(engine);
 }
 
-inline std::string convertToString(double num) {
-    std::ostringstream convert;
-    convert << num;
-    return convert.str();
-}
-
-inline double roundOff(double n) {
-    double d = n * 100.0;
-    int i = d + 0.5;
-    d = (float)i / 100.0;
-    return d;
-}
-
+// Size with a unit, rounded to 2 decimals: "1.5 MB".
 inline std::string humanize_bytes(std::int64_t size) {
     if (size < 0)
-        return convertToString(size);
+        return std::to_string(size);
 
-    static const char *SIZES[] = {"B", "KB", "MB", "GB", "TB", "PB"};
-    int div = 0;
-    size_t rem = 0;
-
-    while (size >= 1024 && div < (sizeof SIZES / sizeof *SIZES)) {
-        rem = (size % 1024);
-        div++;
-        size /= 1024;
-
-        // Check if size is over our available measures
-        if (div >= 5)
-            break;
+    static const char *units[] = {"B", "KB", "MB", "GB", "TB", "PB"};
+    double value = double(size);
+    int unit = 0;
+    while (value >= 1024 && unit < 5) {
+        value /= 1024;
+        unit++;
     }
 
-    double size_d = (float)size + (float)rem / 1024.0;
-    std::string result = convertToString(roundOff(size_d)) + " " + SIZES[div];
+    char result[32];
+    snprintf(result, sizeof(result), "%g %s", std::round(value * 100) / 100, units[unit]);
     return result;
 }
 
-inline int progression_result(int a, double r, int N) {
-    // finding the Nth term in:
-    // TN = a1 * r^(N-1)
-    return int(a * (double)(pow(r, N - 1))); 
-}
+// Nth term of a geometric progression: a * r^(N-1).
+inline int progression_result(int a, double r, int N) { return int(a * std::pow(r, N - 1)); }

@@ -600,8 +600,7 @@ void Session::load_previous_torrents() {
 
     OATPP_LOGI("Session::load_previous_torrents", "Loading previous torrents from: %s", m_config.torrents_path.c_str());
     boost::system::error_code ec;
-    std::multimap<std::time_t, boost::filesystem::path> entries = list_dir(
-        m_config.torrents_path, [](lt::string_view p) { return p.size() > 8 && p.substr(p.size() - 8) == ".torrent"; }, ec);
+    auto entries = list_files(m_config.torrents_path, ".torrent", ec);
     if (ec) {
         OATPP_LOGE("Session::load_previous_torrents", "Failed to list directory '%s': %s", m_config.torrents_path.c_str(),
                    ec.message().c_str());
