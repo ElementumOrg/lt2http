@@ -63,10 +63,11 @@ On hosts without a matching image, build the dependencies natively with `PREFIX=
 
 Build lt2http
 ----------
-`lt2http` is built with CMake (C++17). Options (`-D<option>=ON|OFF`):
-- `build_library` - build the `lt2http.so` / `lt2http.dll` shared library instead of the binary (default: OFF)
+`lt2http` is built with CMake (C++17). The `lt2http` target is the binary, `lt2http_library` the `lt2http.so` / `lt2http.dll`
+shared library, both link the same objects. Options (`-D<option>=ON|OFF`):
 - `static_runtime` - link the C++ runtime statically (default: ON)
 - `enable_sanitizers` - build with address, leak and undefined behavior sanitizers (default: OFF)
+- `build_tests` - build the unit tests, run with `ctest` (default: OFF)
 
 Shared library
 ----------

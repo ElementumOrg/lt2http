@@ -4,14 +4,9 @@
 #include <cassert>
 #include <csignal>
 
-#include <oatpp/network/Server.hpp>
-
-#include <app/app_component.h>
 #include <app/config.h>
 
 #include <bittorrent/session.h>
-
-#include <web/error_handler.h>
 
 void signalHandler(int signum);
 

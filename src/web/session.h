@@ -3,6 +3,7 @@
 #include <sstream>
 
 #include "oatpp/core/macro/codegen.hpp"
+#include "oatpp/core/macro/component.hpp"
 #include "oatpp/parser/json/mapping/ObjectMapper.hpp"
 #include "oatpp/web/mime/multipart/InMemoryDataProvider.hpp"
 #include "oatpp/web/mime/multipart/PartList.hpp"

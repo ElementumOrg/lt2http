@@ -52,11 +52,14 @@ help:
 	@echo "Platforms:"
 	@printf '  %s\n' $(PLATFORMS)
 
+# The binary and the library of a platform share one CMake build (and its objects), so the library is built after the
+# binary, never at the same time in the same directory
 $(PLATFORMS): PLATFORM = $@
-$(PLATFORMS): CMAKE_BUILD = $(BUILD_DIR)/cmake/$@
+$(PLATFORMS): CMAKE_TARGET = lt2http
+$(SHARED_PLATFORMS): %-shared: %
 $(SHARED_PLATFORMS): PLATFORM = $(@:-shared=)
-$(SHARED_PLATFORMS): CMAKE_BUILD = $(BUILD_DIR)/cmake/$@
-$(SHARED_PLATFORMS): CMAKE_FLAGS += -Dbuild_library=ON
+$(SHARED_PLATFORMS): CMAKE_TARGET = lt2http_library
+$(PLATFORMS) $(SHARED_PLATFORMS): CMAKE_BUILD = $(BUILD_DIR)/cmake/$(PLATFORM)
 
 # Output file name, by kind (binary/library) and target OS
 output_name = $(NAME)$(if $(filter %-shared,$1),$(if $(filter windows-%,$1),.dll,.so),$(if $(filter windows-%,$1),.exe))
@@ -66,7 +69,7 @@ $(PLATFORMS) $(SHARED_PLATFORMS):
 	$(DOCKER) run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/$(NAME)" -w "/$(NAME)" $(DOCKER_IMAGE):$(PLATFORM) bash -c '\
 		cmake -B "$(CMAKE_BUILD)" $${CMAKE_TOOLCHAIN_FILE:+-DCMAKE_TOOLCHAIN_FILE=$$CMAKE_TOOLCHAIN_FILE} \
 			-DCMAKE_BUILD_TYPE=$(BUILD_TYPE) -Dlt2http_version=$(GIT_VERSION) $(CMAKE_FLAGS) && \
-		cmake --build "$(CMAKE_BUILD)" -j$(BUILD_JOBS)'
+		cmake --build "$(CMAKE_BUILD)" --target $(CMAKE_TARGET) -j$(BUILD_JOBS)'
 	cp "$(CMAKE_BUILD)/$(call output_name,$@)" "$(BUILD_DIR)/$(PLATFORM)/"
 	@# The add-on compares the sha1 appended to the file to decide if it has to copy a new version
 	sha1sum "$(BUILD_DIR)/$(PLATFORM)/$(call output_name,$@)" | cut -c1-40 >> "$(BUILD_DIR)/$(PLATFORM)/$(call output_name,$@)"

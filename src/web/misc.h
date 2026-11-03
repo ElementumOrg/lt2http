@@ -1,12 +1,13 @@
 #pragma once
 
 #include "oatpp/core/macro/codegen.hpp"
+#include "oatpp/core/macro/component.hpp"
 #include "oatpp/parser/json/mapping/ObjectMapper.hpp"
 #include "oatpp/web/server/api/ApiController.hpp"
 
 #include <app/application.h>
-#include <app/config.h>
 #include <app/build_info.h>
+#include <app/config.h>
 
 #include OATPP_CODEGEN_BEGIN(ApiController)
 

@@ -4,12 +4,14 @@
 
 #include "oatpp-swagger/Types.hpp"
 #include "oatpp/core/macro/codegen.hpp"
+#include "oatpp/core/macro/component.hpp"
 #include "oatpp/parser/json/mapping/ObjectMapper.hpp"
 
 #include <libtorrent/download_priority.hpp>
 
 #include <app/application.h>
 
+#include <bittorrent/file.h>
 #include <bittorrent/reader.h>
 
 #include <dto/file_operation.h>

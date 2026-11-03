@@ -1,5 +1,7 @@
 #include "basic_auth.h"
 
+#include <oatpp/network/tcp/server/ConnectionProvider.hpp>
+
 #include <app/application.h>
 
 namespace lh {

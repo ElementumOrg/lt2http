@@ -8,13 +8,11 @@
 
 #include <app/config.h>
 
-#include <web/files.h>
-#include <web/misc.h>
-#include <web/session.h>
-#include <web/settings.h>
-#include <web/stream.h>
-#include <web/swagger.h>
-#include <web/torrents.h>
+#include <oatpp/network/Server.hpp>
+
+#include <app/app_component.h>
+
+#include <web/controllers.h>
 
 namespace lh {
 
@@ -42,14 +40,11 @@ void Application::run() {
 
     auto router = components.httpRouter.getObject();
     oatpp::web::server::api::Endpoints docEndpoints;
-    docEndpoints.append(router->addController(SettingsController::createShared())->getEndpoints());
-    docEndpoints.append(router->addController(MiscController::createShared())->getEndpoints());
-    docEndpoints.append(router->addController(SessionController::createShared())->getEndpoints());
-    docEndpoints.append(router->addController(TorrentsController::createShared())->getEndpoints());
-    docEndpoints.append(router->addController(FilesController::createShared())->getEndpoints());
-    docEndpoints.append(router->addController(StreamController::createShared())->getEndpoints());
+    for (const auto &controller : {createSettingsController(), createMiscController(), createSessionController(),
+                                   createTorrentsController(), createFilesController(), createStreamController()})
+        docEndpoints.append(router->addController(controller)->getEndpoints());
 
-    router->addController(oatpp::swagger::CustomController::createShared(docEndpoints));
+    router->addController(createSwaggerController(docEndpoints));
 
     /* Get connection handler component */
     OATPP_COMPONENT(std::shared_ptr<oatpp::network::ConnectionHandler>, connectionHandler);
