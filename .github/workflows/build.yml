@@ -1,0 +1,92 @@
+name: build
+
+on:
+  push:
+    branches:
+      - '*'
+    tags:
+      - v*
+  pull_request:
+    branches:
+      - '*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    strategy:
+      # Let every platform finish (and keep its log) even if another one fails
+      fail-fast: false
+      max-parallel: 7
+      matrix:
+        platform: [
+          android-arm, android-arm64, android-x64, android-x86,
+          darwin-x64, darwin-arm64,
+          linux-armv6, linux-armv7, linux-armv7_softfp, linux-arm64, linux-x64, linux-x86,
+          windows-x64, windows-x86 ]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          # Tags for the version reported by lt2http (git describe), submodules for json_struct and cpp-httplib
+          fetch-depth: 0
+          submodules: recursive
+
+      # Dependencies come prebuilt in elementumorg/lt2http:<platform> (make env PLATFORM=<platform>)
+      - name: Build ${{ matrix.platform }}
+        run: |
+          make ${{ matrix.platform }}
+          make ${{ matrix.platform }}-shared
+
+      - name: Upload ${{ matrix.platform }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.platform }}
+          path: build/${{ matrix.platform }}/
+          if-no-files-found: error
+
+  bundle:
+    name: Bundle all platforms
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Download all platform artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+
+      # Same layout as resources/bin of service.lt2http: <os>-<arch>/lt2http(.exe) and lt2http.so/.dll
+      - name: Bundle
+        run: |
+          cd artifacts
+          zip -r ../lt2http-binaries.zip .
+
+      - name: Upload combined zip
+        uses: actions/upload-artifact@v7
+        with:
+          name: lt2http-binaries
+          path: lt2http-binaries.zip
+
+  trigger-downstream:
+    name: Trigger service.lt2http build
+    runs-on: ubuntu-latest
+    needs: bundle
+    # PR runs get no secrets when they come from forks, and same-repo branches are already covered by their push run
+    if: github.event_name == 'push'
+    steps:
+      - name: Trigger workflow in service.lt2http
+        uses: actions/github-script@v9
+        with:
+          github-token: ${{ secrets.GH_TOKEN }}
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: 'ElementumOrg',
+              repo: 'service.lt2http',
+              workflow_id: 'build.yml',
+              ref: 'master',
+              inputs: {
+                binaries_branch: context.refName,
+                binaries_run_id: String(context.runId)
+              }
+            });
