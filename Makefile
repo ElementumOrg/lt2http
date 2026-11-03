@@ -22,7 +22,7 @@ JOBS ?= 4
 BUILD_JOBS ?= $(shell nproc)
 
 .PHONY: all help $(PLATFORMS) $(SHARED_PLATFORMS) $(addprefix env-,$(PLATFORMS)) env envs pull pull-all push push-all \
-	local-env local binaries clean distclean
+	local-env local test lint format binaries clean distclean
 
 all:
 	$(MAKE) -j$(JOBS) --output-sync=target BUILD_JOBS=$$(( $$(nproc) / $(JOBS) + 1 )) $(PLATFORMS) $(SHARED_PLATFORMS)
@@ -35,6 +35,10 @@ help:
 	@echo "  <platform>           Build the binary, e.g. 'make linux-x64'"
 	@echo "  <platform>-shared    Build the shared library, e.g. 'make windows-x64-shared'"
 	@echo "  local-env, local     Copy dependencies from the LOCAL_PLATFORM image into ./local-env, then build lt2http with the host compiler"
+	@echo
+	@echo "Checks:"
+	@echo "  test                 Unit tests in the linux-x64 image, then tests/smoke_test.sh on the host (needs curl and python3)"
+	@echo "  lint                 clang-format and shellcheck checks ('make format' fixes the formatting)"
 	@echo
 	@echo "Images:"
 	@echo "  env PLATFORM=<p>     Build the dependencies image for a platform (envs: all of them)"
@@ -114,6 +118,27 @@ binaries:
 		$(GIT) commit -m "Update to $(GIT_VERSION)" && \
 		$(GIT) tag -f $(GIT_VERSION) && \
 		$(GIT) push origin master --tags
+
+# Unit tests in the linux-x64 image, then the end-to-end test of that binary on the host
+test:
+	$(DOCKER) run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/$(NAME)" -w "/$(NAME)" $(DOCKER_IMAGE):linux-x64 bash -c '\
+		cmake -B "$(BUILD_DIR)/cmake/test" $${CMAKE_TOOLCHAIN_FILE:+-DCMAKE_TOOLCHAIN_FILE=$$CMAKE_TOOLCHAIN_FILE} \
+			-DCMAKE_BUILD_TYPE=$(BUILD_TYPE) -Dlt2http_version=$(GIT_VERSION) -Dbuild_tests=ON $(CMAKE_FLAGS) && \
+		cmake --build "$(BUILD_DIR)/cmake/test" -j$(BUILD_JOBS) && \
+		ctest --test-dir "$(BUILD_DIR)/cmake/test" --output-on-failure'
+	tests/smoke_test.sh "$(BUILD_DIR)/cmake/test/lt2http"
+
+# CI pins the versions: pip install clang-format==19.1.7 shellcheck-py==0.10.0.1
+CLANG_FORMAT ?= clang-format
+FORMAT_FILES = $(shell $(GIT) ls-files 'src/*.h' 'src/*.cpp' 'tests/*.cpp' ':!:src/external')
+SHELL_FILES = $(shell $(GIT) ls-files '*.sh' ':!:src/external')
+
+lint:
+	$(CLANG_FORMAT) --style=file --dry-run --Werror $(FORMAT_FILES)
+	shellcheck $(SHELL_FILES)
+
+format:
+	$(CLANG_FORMAT) --style=file -i $(FORMAT_FILES)
 
 clean:
 	rm -rf $(addprefix $(BUILD_DIR)/,$(PLATFORMS)) $(BUILD_DIR)/cmake
