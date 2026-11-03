@@ -5,8 +5,7 @@
 #include "oatpp/core/macro/codegen.hpp"
 #include "oatpp/parser/json/mapping/ObjectMapper.hpp"
 #include "oatpp/web/server/api/ApiController.hpp"
-#include "oatpp/web/mime/multipart/FileStreamProvider.hpp"
-#include "oatpp/web/mime/multipart/InMemoryPartReader.hpp"
+#include "oatpp/web/mime/multipart/InMemoryDataProvider.hpp"
 #include "oatpp/web/mime/multipart/PartList.hpp"
 #include "oatpp/web/mime/multipart/Reader.hpp"
 
@@ -165,11 +164,14 @@ class SessionController : public oatpp::web::server::api::ApiController {
             request->transferBody(&reader);
 
             auto file = multipart->getNamedPart("file");
+            if (!file)
+                throw std::invalid_argument("Request has no 'file' part");
+            auto data = file->getPayload()->getInMemoryData();
             std::string uri = path_append(lh::config().torrents_path, "tmp_" + get_random_numeric(10) + ".torrent");
 
             OATPP_LOGI("SessionController::add_file", "Saving uploaded file to: %s", uri.c_str())
 
-            save_file(uri, file->getInMemoryData()->c_str(), file->getInMemoryData()->getSize());
+            save_file(uri, data->c_str(), data->size());
 
             auto torrent = lh::session().add_torrent(uri, false, storage, true, std::chrono::system_clock::now());
 
@@ -208,7 +210,7 @@ class SessionController : public oatpp::web::server::api::ApiController {
             QUERY(String, storage_param, "storage", "automatic")
     ) {
         try {
-            auto uri = uri_unescape(uri_param->std_str());
+            auto uri = uri_unescape(*uri_param);
             auto storage = lh::from_string<lh::storage_type_t, lh::js_storage_type_t_string_struct>(storage_param->c_str());
 
             if (uri.rfind("http", 0) == 0) {

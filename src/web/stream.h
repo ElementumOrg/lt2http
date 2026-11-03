@@ -37,7 +37,7 @@ class StreamController : public oatpp::web::server::api::ApiController {
   private:
     std::shared_ptr<oatpp::web::protocol::http::outgoing::Response> streamFile(const oatpp::String& hash_param, const oatpp::String& index_param, 
         const std::shared_ptr<IncomingRequest>& request) {
-        auto hash = uri_unescape(hash_param->std_str());
+        auto hash = uri_unescape(*hash_param);
         auto index = -1;
 
         OATPP_LOGD("FilesController::stream", "Request Header: Method = %s", request->getStartingLine().method.toString()->c_str())
@@ -47,7 +47,7 @@ class StreamController : public oatpp::web::server::api::ApiController {
         }
 
         try {
-            index = std::stoi(uri_unescape(index_param->std_str()));
+            index = std::stoi(uri_unescape(*index_param));
 
             boost::trim(hash);
             boost::to_lower(hash);
@@ -61,7 +61,7 @@ class StreamController : public oatpp::web::server::api::ApiController {
             }
 
             auto rangeHeader = request->getHeader(Header::RANGE);
-            if (rangeHeader == nullptr || rangeHeader->getSize() == 0)
+            if (rangeHeader == nullptr || rangeHeader->empty())
                 rangeHeader = "bytes=0-";
             auto range = oatpp::web::protocol::http::Range::parse(rangeHeader);
             if (range.end == 0)

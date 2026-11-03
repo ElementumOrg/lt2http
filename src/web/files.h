@@ -56,12 +56,12 @@ class FilesController : public oatpp::web::server::api::ApiController {
             PATH(String, index_param, "index"), 
             QUERY(String, buffer_param, "buffer", "false")
     ) {
-        auto hash = uri_unescape(hash_param->std_str());
+        auto hash = uri_unescape(*hash_param);
         auto index = -1;
 
         try {
-            auto is_buffer = uri_unescape(buffer_param->std_str()) == "true";
-            index = std::stoi(uri_unescape(index_param->std_str()));
+            auto is_buffer = uri_unescape(*buffer_param) == "true";
+            index = std::stoi(uri_unescape(*index_param));
 
             boost::trim(hash);
             boost::to_lower(hash);
@@ -107,11 +107,11 @@ class FilesController : public oatpp::web::server::api::ApiController {
             PATH(String, hash_param, "infoHash"),
             PATH(String, index_param, "index")
     ) {
-        auto hash = uri_unescape(hash_param->std_str());
+        auto hash = uri_unescape(*hash_param);
         auto index = -1;
 
         try {
-            index = std::stoi(uri_unescape(index_param->std_str()));
+            index = std::stoi(uri_unescape(*index_param));
 
             boost::trim(hash);
             boost::to_lower(hash);
@@ -157,11 +157,11 @@ class FilesController : public oatpp::web::server::api::ApiController {
             PATH(String, index_param, "index"), 
             HEADER(String, hostHeader, Header::HOST)
     ) {
-        auto hash = uri_unescape(hash_param->std_str());
+        auto hash = uri_unescape(*hash_param);
         auto index = -1;
 
         try {
-            index = std::stoi(uri_unescape(index_param->std_str()));
+            index = std::stoi(uri_unescape(*index_param));
 
             boost::trim(hash);
             boost::to_lower(hash);
@@ -169,7 +169,7 @@ class FilesController : public oatpp::web::server::api::ApiController {
             auto torrent = lh::session().get_torrent(hash);
             auto file = torrent->get_file(index);
 
-            std::string host = "http://" + hostHeader->std_str();
+            std::string host = "http://" + (*hostHeader);
             return createDtoResponse(Status::CODE_200, fileInfoDtoFromFile(file, {}, {}, host, false));
         } catch (std::exception &e) {
             OATPP_LOGE("FilesController::info", "Error getting info from file: %s", e.what())
@@ -197,11 +197,11 @@ class FilesController : public oatpp::web::server::api::ApiController {
             PATH(String, hash_param, "infoHash"),
             PATH(String, index_param, "index")
     ) {
-        auto hash = uri_unescape(hash_param->std_str());
+        auto hash = uri_unescape(*hash_param);
         auto index = -1;
 
         try {
-            index = std::stoi(uri_unescape(index_param->std_str()));
+            index = std::stoi(uri_unescape(*index_param));
 
             boost::trim(hash);
             boost::to_lower(hash);

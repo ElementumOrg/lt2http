@@ -2,6 +2,7 @@
 
 #include "oatpp/web/server/api/ApiController.hpp"
 #include "oatpp/web/server/handler/AuthorizationHandler.hpp"
+#include "oatpp/web/server/interceptor/RequestInterceptor.hpp"
 #include "oatpp/web/protocol/http/outgoing/ResponseFactory.hpp"
 
 namespace lh {

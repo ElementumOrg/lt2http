@@ -4,7 +4,7 @@
 #include "oatpp/parser/json/mapping/ObjectMapper.hpp"
 #include "oatpp/web/server/api/ApiController.hpp"
 
-#include <json_struct.h>
+#include <json_struct/json_struct.h>
 
 #include <app/application.h>
 

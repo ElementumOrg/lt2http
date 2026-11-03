@@ -52,35 +52,15 @@ void Application::run() {
     AppComponent components;
 
     auto router = components.httpRouter.getObject();
-    auto docEndpoints = oatpp::swagger::CustomController::Endpoints::createShared();
-  
-    auto settingsController = SettingsController::createShared();
-    settingsController->addEndpointsToRouter(router);
+    oatpp::web::server::api::Endpoints docEndpoints;
+    docEndpoints.append(router->addController(SettingsController::createShared())->getEndpoints());
+    docEndpoints.append(router->addController(MiscController::createShared())->getEndpoints());
+    docEndpoints.append(router->addController(SessionController::createShared())->getEndpoints());
+    docEndpoints.append(router->addController(TorrentsController::createShared())->getEndpoints());
+    docEndpoints.append(router->addController(FilesController::createShared())->getEndpoints());
+    docEndpoints.append(router->addController(StreamController::createShared())->getEndpoints());
 
-    auto miscController = MiscController::createShared();
-    miscController->addEndpointsToRouter(router);
-
-    auto sessionController = SessionController::createShared();
-    sessionController->addEndpointsToRouter(router);
-
-    auto torrentsController = TorrentsController::createShared();
-    torrentsController->addEndpointsToRouter(router);
-
-    auto filesController = FilesController::createShared();
-    filesController->addEndpointsToRouter(router);
-
-    auto streamController = StreamController::createShared();
-    streamController->addEndpointsToRouter(router);
-
-    docEndpoints->pushBackAll(settingsController->getEndpoints());
-    docEndpoints->pushBackAll(miscController->getEndpoints());
-    docEndpoints->pushBackAll(sessionController->getEndpoints());
-    docEndpoints->pushBackAll(torrentsController->getEndpoints());
-    docEndpoints->pushBackAll(filesController->getEndpoints());
-    docEndpoints->pushBackAll(streamController->getEndpoints());
-  
-    auto swaggerController = oatpp::swagger::CustomController::createShared(docEndpoints);
-    swaggerController->addEndpointsToRouter(router);
+    router->addController(oatpp::swagger::CustomController::createShared(docEndpoints));
 
     /* Get connection handler component */
     OATPP_COMPONENT(std::shared_ptr<oatpp::network::ConnectionHandler>, connectionHandler);

@@ -45,7 +45,7 @@ public:
    * @param resources - &id:oatpp::swagger::Resources;.
    * @return - Controller.
    */
-  static std::shared_ptr<CustomController> createShared(const std::shared_ptr<Endpoints>& endpointsList,
+  static std::shared_ptr<CustomController> createShared(const oatpp::web::server::api::Endpoints& endpointsList,
                                                   OATPP_COMPONENT(std::shared_ptr<oatpp::swagger::DocumentInfo>, documentInfo),
                                                   OATPP_COMPONENT(std::shared_ptr<oatpp::swagger::Resources>, resources)){
     
@@ -60,7 +60,7 @@ public:
     std::shared_ptr<Generator::Config> generatorConfig;
     try {
       generatorConfig = OATPP_GET_COMPONENT(std::shared_ptr<Generator::Config>);
-    } catch (std::runtime_error e) {
+    } catch (std::runtime_error&) {
       generatorConfig = std::make_shared<Generator::Config>();
     }
 

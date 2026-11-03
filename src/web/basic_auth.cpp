@@ -19,7 +19,7 @@ std::shared_ptr<AuthInterceptor::OutgoingResponse> AuthInterceptor::intercept(co
     auto authObject = std::static_pointer_cast<oatpp::web::server::handler::DefaultBasicAuthorizationObject>(
         m_authHandler.handleAuthorization(authHeader));
 
-    if (authObject->userId->std_str() == config.web_login && authObject->password->std_str() == config.web_password) {
+    if ((*authObject->userId) == config.web_login && (*authObject->password) == config.web_password) {
         // Authorized
         return nullptr;
     }

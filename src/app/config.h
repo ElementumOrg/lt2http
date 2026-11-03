@@ -4,7 +4,7 @@
 #include <stdexcept>
 #include <vector>
 
-#include <json_struct.h>
+#include <json_struct/json_struct.h>
 
 #include <utils/exceptions.h>
 

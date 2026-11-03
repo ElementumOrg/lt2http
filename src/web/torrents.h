@@ -48,7 +48,7 @@ class TorrentsController : public oatpp::web::server::api::ApiController {
         QUERY(String, status_param, "status", "false") 
     ) {
         try {
-            auto is_status = uri_unescape(status_param->std_str()) == "true";
+            auto is_status = uri_unescape(*status_param) == "true";
 
             auto list = oatpp::List<oatpp::Object<TorrentInfoDto>>::createShared();
 
@@ -90,11 +90,11 @@ class TorrentsController : public oatpp::web::server::api::ApiController {
         QUERY(String, delete_files_param, "deleteFiles", "true"), 
         QUERY(String, delete_data_param, "deleteData", "false")
     ) {
-        auto hash = uri_unescape(hash_param->std_str());
+        auto hash = uri_unescape(*hash_param);
 
         try {
-            auto is_delete_files = uri_unescape(delete_files_param->std_str()) == "true";
-            auto is_delete_data = uri_unescape(delete_data_param->std_str()) == "true";
+            auto is_delete_files = uri_unescape(*delete_files_param) == "true";
+            auto is_delete_data = uri_unescape(*delete_data_param) == "true";
 
             boost::trim(hash);
             boost::to_lower(hash);
@@ -131,7 +131,7 @@ class TorrentsController : public oatpp::web::server::api::ApiController {
     ENDPOINT("GET", "/torrents/{infoHash}/resume", resume, 
         PATH(String, hash_param, "infoHash")
     ) {
-        auto hash = uri_unescape(hash_param->std_str());
+        auto hash = uri_unescape(*hash_param);
 
         try {
             boost::trim(hash);
@@ -170,7 +170,7 @@ class TorrentsController : public oatpp::web::server::api::ApiController {
     ENDPOINT("GET", "/torrents/{infoHash}/pause", pause, 
         PATH(String, hash_param, "infoHash")
     ) {
-        auto hash = uri_unescape(hash_param->std_str());
+        auto hash = uri_unescape(*hash_param);
 
         try {
             boost::trim(hash);
@@ -214,8 +214,8 @@ class TorrentsController : public oatpp::web::server::api::ApiController {
         PATH(String, hash_param, "infoHash"),
         QUERY(String, status_param, "status", "false")
     ) {
-        auto hash = uri_unescape(hash_param->std_str());
-        auto is_status = uri_unescape(status_param->std_str()) == "true";
+        auto hash = uri_unescape(*hash_param);
+        auto is_status = uri_unescape(*status_param) == "true";
 
         try {
             boost::trim(hash);
@@ -249,7 +249,7 @@ class TorrentsController : public oatpp::web::server::api::ApiController {
     ENDPOINT("GET", "/torrents/{infoHash}/status", status, 
         PATH(String, hash_param, "infoHash")
     ) {
-        auto hash = uri_unescape(hash_param->std_str());
+        auto hash = uri_unescape(*hash_param);
 
         try {
             boost::trim(hash);
@@ -289,8 +289,8 @@ class TorrentsController : public oatpp::web::server::api::ApiController {
         QUERY(String, status_param, "status", "false"), 
         HEADER(String, hostHeader, Header::HOST)
     ) {
-        auto hash = uri_unescape(hash_param->std_str());
-        auto is_status = uri_unescape(status_param->std_str()) == "true";
+        auto hash = uri_unescape(*hash_param);
+        auto is_status = uri_unescape(*status_param) == "true";
 
         try {
             boost::trim(hash);
@@ -303,7 +303,7 @@ class TorrentsController : public oatpp::web::server::api::ApiController {
             auto list = oatpp::List<oatpp::Object<FileInfoDto>>::createShared();
             auto completed = torrent->files_completed_bytes();
             auto progress = torrent->files_progress();
-            std::string host = "http://" + hostHeader->std_str();
+            std::string host = "http://" + (*hostHeader);
 
             for (auto &file : torrent->files()) {
                 list->push_back(fileInfoDtoFromFile(file, completed, progress, host, is_status));
@@ -333,7 +333,7 @@ class TorrentsController : public oatpp::web::server::api::ApiController {
     ENDPOINT("GET", "/torrents/{infoHash}/generate", generate, 
         PATH(String, hash_param, "infoHash")
     ) {
-        auto hash = uri_unescape(hash_param->std_str());
+        auto hash = uri_unescape(*hash_param);
 
         try {
             boost::trim(hash);
