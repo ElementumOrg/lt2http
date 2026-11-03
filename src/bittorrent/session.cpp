@@ -724,13 +724,17 @@ std::shared_ptr<Torrent> Session::add_torrent(std::string uri, bool is_paused, l
         std::vector<char> resume_data;
         auto resume_path = resume_file(m_config.torrents_path, hash);
         if (load_file(resume_path, resume_data)) {
-            p = lt::read_resume_data(resume_data, ec);
-            if (ec) {
-                OATPP_LOGI("Session::add_torrent", "Failed to load resume data: %s", ec.message().c_str());
+            lt::error_code resume_ec;
+            auto resume = lt::read_resume_data(resume_data, resume_ec);
+            if (resume_ec) {
+                // Added without it, as a new torrent
+                OATPP_LOGI("Session::add_torrent", "Failed to load resume data: %s", resume_ec.message().c_str());
             } else {
                 OATPP_LOGI("Session::add_torrent", "Using resume data: %s", resume_path.c_str());
-                if (p.ti)
-                    hash = to_hex(p.ti->info_hash());
+                // Resume data is saved without the info dictionary, keep the metadata of the torrent file
+                if (!resume.ti)
+                    resume.ti = p.ti;
+                p = std::move(resume);
 
                 is_skip_priorities = true;
             }
