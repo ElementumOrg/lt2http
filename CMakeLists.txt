@@ -74,6 +74,12 @@ target_include_directories(lt2http PRIVATE
 
 target_compile_definitions(lt2http PRIVATE LH_VERSION="${lt2http_version}")
 
+# changelog.md is served by /changelog: embed it, and configure again when it changes
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/changelog.md" lt2http_changelog)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS changelog.md)
+configure_file(cmake/changelog.h.in "${CMAKE_BINARY_DIR}/generated/changelog.h" @ONLY)
+target_include_directories(lt2http PRIVATE "${CMAKE_BINARY_DIR}/generated")
+
 # Android before API 24 has no getifaddrs(), which cpp-httplib uses on non-Windows systems
 if (NOT WIN32)
     include(CheckSymbolExists)

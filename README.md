@@ -124,3 +124,5 @@ Release
 Release of a binary part of lt2http means compiling binaries for all platforms and putting them into <https://github.com/ElementumOrg/lt2http-binaries> repository (if we run on the git tag).
 
 Release is done with `release.sh` script.
+
+Changes go into `changelog.md` (rename `Unreleased` to the version when tagging). It is embedded into lt2http at build time and served by `/changelog`.
