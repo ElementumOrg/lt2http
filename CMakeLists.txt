@@ -125,6 +125,16 @@ if (static_runtime AND NOT APPLE)
     endif ()
 endif ()
 
+if (APPLE)
+    # Boost and libtorrent are built with hidden visibility, ld64 warns about every shared weak symbol whose visibility differs
+    set_target_properties(lt2http PROPERTIES CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN ON)
+endif ()
+
+if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_SYSTEM_PROCESSOR STREQUAL "arm")
+    # The "parameter passing changed in GCC 7.1" notes only matter when mixing code built with older GCC
+    target_compile_options(lt2http PRIVATE -Wno-psabi)
+endif ()
+
 if (enable_sanitizers)
     target_compile_options(lt2http PRIVATE -g -fsanitize=address,leak,undefined)
     target_link_options(lt2http PRIVATE -fsanitize=address,leak,undefined)

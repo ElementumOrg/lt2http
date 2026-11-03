@@ -48,9 +48,14 @@ function download() {
 }
 
 function build_cmake() {
+  # Boost (b2) and libtorrent hide their symbols, ld64 warns about every weak symbol whose visibility differs.
+  # CMP0063: oatpp asks for an old CMake, which ignores the visibility of static libraries.
+  local visibility=()
+  [ "${TARGET_SYSTEM}" = "Darwin" ] && visibility=(-DCMAKE_CXX_VISIBILITY_PRESET=hidden -DCMAKE_VISIBILITY_INLINES_HIDDEN=ON
+    -DCMAKE_POLICY_DEFAULT_CMP0063=NEW)
   cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_STANDARD=17 -DBUILD_SHARED_LIBS=OFF \
     -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_INSTALL_PREFIX="${PREFIX}" -DCMAKE_PREFIX_PATH="${PREFIX}" \
-    ${CMAKE_TOOLCHAIN_FILE:+"-DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}"} "$@"
+    ${CMAKE_TOOLCHAIN_FILE:+"-DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}"} "${visibility[@]}" "$@"
   cmake --build build -j"${jobs}"
   cmake --install build
 }
