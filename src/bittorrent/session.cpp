@@ -94,11 +94,15 @@ Session::Session(lh::Config &config) : m_config(config) {
     start_thread("Session::natpmp", [this] { natpmp(); });
 }
 
-Session::~Session() {
+Session::~Session() { stop_threads(); }
+
+void Session::stop_threads() {
     m_isClosing = true;
     m_cv.notify_all();
-    for (auto &thread : m_threads)
-        thread.join();
+    for (auto &thread : m_threads) {
+        if (thread.joinable())
+            thread.join();
+    }
 }
 
 void Session::start_thread(const char *name, std::function<void()> fn) {
@@ -615,6 +619,7 @@ void Session::handle_alert(const lt::alert *a) {
         // Ignore alert
         break;
     case lt::save_resume_data_alert::alert_type:
+    case lt::save_resume_data_failed_alert::alert_type:
     case lt::dht_reply_alert::alert_type:
     case lt::tracker_announce_alert::alert_type:
     case lt::tracker_error_alert::alert_type:
@@ -706,10 +711,45 @@ void Session::request_update() {
 void Session::close() {
     OATPP_LOGI("Session::close", "Stopping libtorrent session");
 
-    m_isClosing = true;
+    // The alerts thread is stopped first, so the resume data alerts come to save_resume_data_on_close()
+    stop_threads();
+    save_resume_data_on_close();
 
     // Stop lt:: services
     stop_services();
+}
+
+// Resume data is saved every 30 seconds, this saves the changes since then. File priorities are applied by libtorrent
+// after the call that sets them, so the resume data saved by that call can miss them. Waits for the saves requested
+// before too, which the stopped alerts thread did not handle: an older one written after this one would undo it.
+void Session::save_resume_data_on_close() {
+    auto all = torrents();
+    for (const auto &torrent : all)
+        torrent->save_resume_data();
+
+    auto is_pending = [&all] {
+        return std::any_of(all.begin(), all.end(), [](const std::shared_ptr<Torrent> &t) { return t->has_pending_resume_data(); });
+    };
+    auto const deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+    while (is_pending() && std::chrono::steady_clock::now() < deadline) {
+        if (!m_nativeSession->wait_for_alert(std::chrono::seconds(1)))
+            continue;
+
+        std::vector<lt::alert *> alerts;
+        m_nativeSession->pop_alerts(&alerts);
+        for (const lt::alert *a : alerts) {
+            if (a->type() != lt::save_resume_data_alert::alert_type && a->type() != lt::save_resume_data_failed_alert::alert_type)
+                continue;
+            try {
+                dispatch_alert(a);
+            } catch (const std::exception &e) {
+                OATPP_LOGE("Session::save_resume_data_on_close", "Error saving resume data: %s", e.what());
+            }
+        }
+    }
+
+    if (is_pending())
+        OATPP_LOGE("Session::save_resume_data_on_close", "Resume data was not saved in time");
 }
 
 void Session::load_previous_torrents() {

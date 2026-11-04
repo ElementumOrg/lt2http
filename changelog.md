@@ -9,6 +9,7 @@
 - Torrent info has `is_paused`, `total_files`, `chosen_files` and the `memory_size` of memory storage, file info takes `?status=true`.
 - `/status` shows the lt2http version and commit, the libtorrent version and the user agent.
 - `/info` has actions for torrents and files (pause, resume, remove, download, stop, buffer, priority), shows one torrent with `?torrent=<infoHash>` and hides sections with `?files=false`, `?trackers=false`, `?pieces=false`. Trackers show their tier, status, scrape numbers and next announce, pieces show the ones in download and totals.
+- Fixed file priority changes lost when lt2http stopped within 30 seconds of them: resume data is saved on shutdown.
 - Fixed `limit_after_buffering` turning off the download and upload limits for good: limits now apply once buffering is done.
 - Added lt2http as a shared library (`lt2http.so` / `lt2http.dll`), started with `startWithLogAndArgs()`.
 - Added linux-armv7_softfp and darwin-arm64 (Apple Silicon) builds.

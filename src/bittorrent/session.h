@@ -52,6 +52,8 @@ class Session {
     // Waits for the timeout, returns true if the session is closing.
     bool wait_for_abort(std::chrono::milliseconds timeout);
     void start_thread(const char *name, std::function<void()> fn);
+    void stop_threads();
+    void save_resume_data_on_close();
 
     std::vector<std::string> listen_interfaces() const;
     std::string listen_endpoints();

@@ -90,6 +90,7 @@ class Torrent : public std::enable_shared_from_this<lh::Torrent> {
     std::chrono::steady_clock::time_point m_playersIdleSince = std::chrono::steady_clock::now();
 
     std::atomic<bool> m_isStopped{false};
+    mutable std::atomic<int> m_pendingResumeData{0};
 
     std::chrono::time_point<std::chrono::system_clock> m_addedTime;
 
@@ -191,6 +192,8 @@ class Torrent : public std::enable_shared_from_this<lh::Torrent> {
     void dump(std::stringstream &ss, bool is_files, bool is_trackers, bool is_pieces);
 
     void save_resume_data() const;
+    // Saves requested, their save_resume_data(_failed)_alert not handled yet
+    bool has_pending_resume_data() const;
     void save_torrent_file() const;
     std::vector<char> generate() const;
 

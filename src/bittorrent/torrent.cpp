@@ -407,7 +407,12 @@ void Torrent::update_reserved_pieces(const std::vector<int> &pieces) {
 void Torrent::dispatch_alert(const lt::alert *a) {
     switch (a->type()) {
     case lt::save_resume_data_alert::alert_type:
+        m_pendingResumeData--;
         handle_save_resume_data_alert(static_cast<const lt::save_resume_data_alert *>(a));
+        break;
+    case lt::save_resume_data_failed_alert::alert_type:
+        m_pendingResumeData--;
+        OATPP_LOGE("Torrent::dispatch_alert", "Could not save resume data of %s: %s", m_hash.c_str(), a->message().c_str());
         break;
     case lt::dht_reply_alert::alert_type:
         update_tracker("DHT", "", static_cast<const lt::dht_reply_alert *>(a)->num_peers);
@@ -704,9 +709,16 @@ void Torrent::dump(std::stringstream &ss, bool is_files, bool is_trackers, bool 
 
 void Torrent::save_resume_data() const {
     // Resume files are needed only for non-memory storage to keep the history and state.
-    if (!is_memory_storage())
-        with_handle([](const lt::torrent_handle &h) { h.save_resume_data(); });
+    if (is_memory_storage())
+        return;
+    with_handle([this](const lt::torrent_handle &h) {
+        h.save_resume_data();
+        // Every request gets one save_resume_data_alert or save_resume_data_failed_alert
+        m_pendingResumeData++;
+    });
 }
+
+bool Torrent::has_pending_resume_data() const { return m_pendingResumeData > 0; }
 
 void Torrent::save_torrent_file() const {
     if (!has_metadata() || is_memory_storage() || file_exists(m_torrentFile))
