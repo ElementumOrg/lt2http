@@ -23,7 +23,7 @@ JOBS ?= 4
 BUILD_JOBS ?= $(shell nproc)
 
 .PHONY: all help $(PLATFORMS) $(SHARED_PLATFORMS) $(addprefix env-,$(PLATFORMS)) env envs pull pull-all push push-all \
-	local-env local test lint format binaries clean distclean
+	local-env local test test-public lint format binaries clean distclean
 
 all:
 	$(MAKE) -j$(JOBS) --output-sync=target BUILD_JOBS=$$(( $$(nproc) / $(JOBS) + 1 )) $(PLATFORMS) $(SHARED_PLATFORMS)
@@ -39,6 +39,7 @@ help:
 	@echo
 	@echo "Checks:"
 	@echo "  test                 Unit tests in the linux-x64 image, then tests/smoke_test.sh on the host (needs curl and python3)"
+	@echo "  test-public          tests/public_test.sh with a public torrent from the internet (LT2HTTP=<binary>, default: the local build)"
 	@echo "  lint                 clang-format and shellcheck checks ('make format' fixes the formatting)"
 	@echo
 	@echo "Images:"
@@ -131,6 +132,11 @@ test:
 		cmake --build "$(BUILD_DIR)/cmake/test" -j$(BUILD_JOBS) && \
 		ctest --test-dir "$(BUILD_DIR)/cmake/test" --output-on-failure'
 	tests/smoke_test.sh "$(BUILD_DIR)/cmake/test/lt2http"
+
+# End-to-end test with Big Buck Bunny from the internet, downloads about 10 MB
+LT2HTTP ?= $(BUILD_DIR)/cmake/local/lt2http
+test-public:
+	tests/public_test.sh "$(LT2HTTP)"
 
 # CI pins the versions: pip install clang-format==19.1.7 shellcheck-py==0.10.0.1
 CLANG_FORMAT ?= clang-format

@@ -32,6 +32,12 @@ Main API endpoints (see Swagger for all of them and their parameters):
 - `/settings/get`, `/settings/set` - read and change settings at runtime
 - `/shutdown` - stop gracefully (exit code 0)
 
+Tests
+----------
+- `make test` - unit tests, then `tests/smoke_test.sh`: an end-to-end test of the binary that needs no network
+- `make test-public` - `tests/public_test.sh`: an end-to-end test with Big Buck Bunny, a public and legal torrent, downloaded from the internet (about 10 MB, its web seed works without peers). It adds the torrent, selects, downloads, streams and stops files, sets and edits meta info, buffers, restarts, removes the torrent with its data and streams from memory storage. Takes the binary with `LT2HTTP=<path>`, the local build by default
+- Both run anywhere with curl and python3, without Kodi. `KEEP_WORK=1` keeps the logs
+
 Checkout
 ----------
 You can clone this repository with downloading all the submodules, in one command:

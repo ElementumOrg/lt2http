@@ -1,85 +1,20 @@
 #!/bin/bash
 # End-to-end test of a built lt2http binary, needs no network: tests/smoke_test.sh <lt2http binary>
-# KEEP_WORK=1 keeps the temporary directory with the logs.
+# KEEP_WORK=1 keeps the temporary directory with the logs. tests/public_test.sh tests with a torrent from the internet.
 #
 # 1. API basics on a magnet without peers.
 # 2. File storage: a torrent seeded from a local file, streaming (full, ranged, HEAD, 416), /generate.
 # 3. A restart reloads the torrent with its resume data.
 # 4. Memory storage: a second lt2http downloads from the first over localhost and streams, and the
 #    torrent is removed while a slow stream is still reading.
-set -u
+# shellcheck source=common.sh
+source "$(dirname "$0")/common.sh"
 
-BIN=$(readlink -f "$1")
-TESTS=$(dirname "$(readlink -f "$0")")
-WORK=$(mktemp -d)
 SEEDER_PORT=65291
 DOWNLOADER_PORT=65292
 PEER_PORT=65293
-PIDS=()
-FAILED=()
-
-cleanup() {
-    for pid in "${PIDS[@]}"; do kill -9 "$pid" 2>/dev/null; done
-    if [ -n "${KEEP_WORK:-}" ]; then echo "Kept $WORK"; else rm -rf "$WORK"; fi
-}
-trap cleanup EXIT
-
-check() { # check <name> <command...>
-    local name=$1
-    shift
-    if "$@"; then
-        echo "ok   $name"
-    else
-        echo "FAIL $name"
-        FAILED+=("$name")
-    fi
-}
-
-equals() { [ "$1" = "$2" ] || { echo "     expected '$2', got '$1'"; return 1; }; }
-contains() { [[ "$1" == *"$2"* ]] || { echo "     '$2' not in: ${1:0:300}"; return 1; }; }
-
-start() { # start <name> <web port> <args...>: starts lt2http and waits for its API
-    local name=$1 port=$2
-    shift 2
-    mkdir -p "$WORK/$name"
-    echo '{"add_extra_trackers": "none"}' > "$WORK/$name/config.json"
-    "$BIN" --config="$WORK/$name/config.json" --web_port="$port" --torrents_path="$WORK/$name/torrents" \
-        --disable_dht=true --disable_lsd=true --disable_upnp=true "$@" >> "$WORK/$name.log" 2>&1 &
-    PIDS+=($!)
-    eval "${name}_PID=$!"
-    for _ in $(seq 1 50); do
-        curl -s -m 1 "localhost:$port/status" > /dev/null && return 0
-        sleep 0.2
-    done
-    echo "lt2http '$name' did not start:"
-    tail -20 "$WORK/$name.log"
-    return 1
-}
-
-stop() { # stop <name> <web port>: requests a shutdown and expects a clean exit within 15 seconds
-    local name=$1 port=$2 pid_var="${1}_PID"
-    local pid=${!pid_var}
-    curl -s -m 5 "localhost:$port/shutdown" > /dev/null
-    for _ in $(seq 1 60); do
-        kill -0 "$pid" 2>/dev/null || break
-        sleep 0.25
-    done
-    if kill -0 "$pid" 2>/dev/null; then
-        echo "     '$name' still running 15 seconds after /shutdown"
-        return 1
-    fi
-    wait "$pid"
-}
-
-get() { curl -s -m 30 "$@"; }
-
-wait_for() { # wait_for <url> <text> <seconds>: polls the url until the response contains the text
-    for _ in $(seq 1 $(($3 * 4))); do
-        get "$1" | grep -qF "$2" && return 0
-        sleep 0.25
-    done
-    return 1
-}
+# No DHT, LSD and UPnP: the test runs without network
+OFFLINE=(--disable_dht=true --disable_lsd=true --disable_upnp=true)
 
 # Test data: 3 MB file with 16 KB pieces, so a read crosses piece boundaries
 mkdir -p "$WORK/seeder/downloads"
@@ -88,7 +23,7 @@ HASH=$(python3 -I "$TESTS/torrent.py" create "$WORK/seeder/downloads/movie.mp4" 
 MOVIE="$WORK/seeder/downloads/movie.mp4"
 
 echo "== API basics"
-start seeder $SEEDER_PORT --download_path="$WORK/seeder/downloads" --download_storage=file --player_timeout=3 \
+start seeder $SEEDER_PORT --download_path="$WORK/seeder/downloads" --download_storage=file "${OFFLINE[@]}" --player_timeout=3 \
     --listen_auto_detect_ip=false --listen_interfaces=127.0.0.1 --listen_auto_detect_port=false \
     --listen_port_min=$PEER_PORT --listen_port_max=$PEER_PORT || exit 1
 U=http://localhost:$SEEDER_PORT
@@ -168,7 +103,7 @@ check "api docs" contains "$(get $U/api-docs/oas-3.0.0.json)" '"meta_info"'
 check "seeder stops" stop seeder $SEEDER_PORT
 
 echo "== Restart"
-start seeder $SEEDER_PORT --download_path="$WORK/seeder/downloads" --download_storage=file --autoload_torrents_paused=false \
+start seeder $SEEDER_PORT --download_path="$WORK/seeder/downloads" --download_storage=file "${OFFLINE[@]}" --autoload_torrents_paused=false \
     --listen_auto_detect_ip=false --listen_interfaces=127.0.0.1 --listen_auto_detect_port=false \
     --listen_port_min=$PEER_PORT --listen_port_max=$PEER_PORT || exit 1
 wait_for "$U/torrents/$HASH/status" '"total_done":3000000' 30
@@ -177,7 +112,7 @@ check "reloaded torrent is complete" contains "$(get "$U/torrents/$HASH/status")
 check "reloaded meta info" equals "$(get "$U/torrents/$HASH/meta_info")" '{"kept":true}'
 
 echo "== Memory storage from a local peer"
-start downloader $DOWNLOADER_PORT --download_path="$WORK/downloader" --download_storage=memory --player_timeout=2 \
+start downloader $DOWNLOADER_PORT --download_path="$WORK/downloader" --download_storage=memory "${OFFLINE[@]}" --player_timeout=2 \
     --listen_auto_detect_ip=false --listen_interfaces=127.0.0.1 || exit 1
 D=http://localhost:$DOWNLOADER_PORT
 check "add magnet with peer" contains "$(get "$D/service/add/uri?uri=magnet%3A%3Fxt%3Durn%3Abtih%3A$HASH%26x.pe%3D127.0.0.1%3A$PEER_PORT")" '"success":true'
@@ -198,16 +133,4 @@ check "alive after remove" contains "$(get "$D/status")" '"torrents_count":0'
 check "downloader stops" stop downloader $DOWNLOADER_PORT
 check "seeder stops after restart" stop seeder $SEEDER_PORT
 
-for log in "$WORK"/*.log; do
-    check "no crash in $(basename "$log")" bash -c "! grep -E 'AddressSanitizer|runtime error:|LeakSanitizer|terminate called' '$log'"
-done
-
-if [ ${#FAILED[@]} -gt 0 ]; then
-    for log in "$WORK"/*.log; do
-        echo "== $(basename "$log")"
-        grep -vE "portmap|Alert: " "$log" | tail -40
-    done
-    echo "${#FAILED[@]} failed: ${FAILED[*]}"
-    exit 1
-fi
-echo "All passed"
+finish
