@@ -1,6 +1,7 @@
 # Changelog
 
 ## 0.0.17 (2026-11-03)
+- Downloading uses about 40% less CPU: libtorrent ran 4 disk threads per CPU core (64 on a 16-core machine), and woke them all for every block written. It now runs 4.
 - Torrent states are the same as in Elementum: Queued, Checking, Finding, Downloading, Finished, Seeding, Stalled, Paused, Buffering, Playing (and Error), with the same numbers.
 - Added `/torrents/{infoHash}/meta_info`: any JSON set by a client is kept with the torrent (also after a restart), and returned in `/torrents` and `/torrents/{infoHash}/info`.
 - Added `/torrents/{infoHash}/files/{index}/buffer` to download a part of a file first, from any position, with the end of the file.

@@ -172,7 +172,8 @@ void Session::configure() {
 
     m_pack.set_int(lt::settings_pack::listen_queue_size, 30);
     m_pack.set_int(lt::settings_pack::alert_queue_size, std::numeric_limits<int>::max() / 2);
-    m_pack.set_int(lt::settings_pack::aio_threads, std::max(1, int(std::thread::hardware_concurrency())) * 4);
+    // libtorrent wakes all disk threads for each new disk job: many threads cost more CPU than they save. 4 is its default.
+    m_pack.set_int(lt::settings_pack::aio_threads, 4);
     m_pack.set_int(lt::settings_pack::cache_size, -1);
     m_pack.set_int(lt::settings_pack::mixed_mode_algorithm, lt::settings_pack::prefer_tcp);
 
