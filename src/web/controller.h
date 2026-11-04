@@ -9,6 +9,8 @@
 
 #include <libtorrent/download_priority.hpp>
 
+#include <app/application.h>
+#include <app/i18n.h>
 #include <bittorrent/torrent.h>
 
 #include <dto/error.h>
@@ -28,6 +30,11 @@ inline std::string hash_from_param(const oatpp::String &param) {
 }
 
 inline bool is_true(const oatpp::String &param) { return uri_unescape(*param) == "true"; }
+
+// The language of the lang parameter, else of the language setting
+inline std::string language_from_param(const oatpp::String &param) {
+    return resolve_language(uri_unescape(*param), resolve_language(lh::config().language));
+}
 
 inline lt::download_priority_t priority_from_param(const oatpp::String &param) {
     auto priority = std::stoi(uri_unescape(*param));

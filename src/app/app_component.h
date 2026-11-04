@@ -46,6 +46,8 @@ class AppComponent {
     OATPP_CREATE_COMPONENT(std::shared_ptr<oatpp::data::mapping::ObjectMapper>, apiObjectMapper)([] {
         auto objectMapper = oatpp::parser::json::mapping::ObjectMapper::createShared();
         objectMapper->getDeserializer()->getConfig()->allowUnknownFields = true;
+        // UTF-8 text (like translated states) and "/" (like in links) as they are, not as \uXXXX and \/
+        objectMapper->getSerializer()->getConfig()->escapeFlags = 0;
         return objectMapper;
     }());
 

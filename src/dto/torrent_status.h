@@ -3,6 +3,7 @@
 #include "oatpp/core/Types.hpp"
 #include "oatpp/core/macro/codegen.hpp"
 
+#include "app/i18n.h"
 #include "bittorrent/torrent.h"
 
 #include OATPP_CODEGEN_BEGIN(DTO)
@@ -35,8 +36,17 @@ class TorrentStatusDto : public oatpp::DTO {
     DTO_FIELD_INFO(state) { info->description = "Torrent State (as int)"; }
     DTO_FIELD(Int32, state);
 
-    DTO_FIELD_INFO(state_string) { info->description = "Torrent State (as a string)"; }
+    DTO_FIELD_INFO(state_string) { info->description = "Torrent State (as a string, the same in all languages)"; }
     DTO_FIELD(String, state_string);
+
+    DTO_FIELD_INFO(state_localized) { info->description = "Torrent State in the language of the lang parameter or setting"; }
+    DTO_FIELD(String, state_localized);
+
+    DTO_FIELD_INFO(connections) { info->description = "Connections to peers"; }
+    DTO_FIELD(Int32, connections);
+
+    DTO_FIELD_INFO(connections_limit) { info->description = "Limit of connections to peers"; }
+    DTO_FIELD(Int32, connections_limit);
 
     DTO_FIELD_INFO(seeders) { info->description = "Connected seeders"; }
     DTO_FIELD(Int32, seeders);
@@ -68,7 +78,8 @@ class TorrentStatusDto : public oatpp::DTO {
 
 #include OATPP_CODEGEN_END(DTO)
 
-inline oatpp::Object<TorrentStatusDto> torrentStatusDtoFromTorrent(const std::shared_ptr<lh::Torrent> &torrent) {
+// lang: a language like en_gb, for state_localized
+inline oatpp::Object<TorrentStatusDto> torrentStatusDtoFromTorrent(const std::shared_ptr<lh::Torrent> &torrent, const std::string &lang) {
     auto dto = TorrentStatusDto::createShared();
 
     dto->total = torrent->total();
@@ -83,6 +94,11 @@ inline oatpp::Object<TorrentStatusDto> torrentStatusDtoFromTorrent(const std::sh
 
     dto->state = int(torrent->state());
     dto->state_string = torrent->state_string();
+    dto->state_localized = lh::translate(lang, "state." + torrent->state_string());
+
+    auto snapshot = torrent->snapshot();
+    dto->connections = snapshot->status.num_connections;
+    dto->connections_limit = snapshot->status.connections_limit;
 
     dto->seeders = torrent->seeds_count();
     dto->seeders_total = torrent->total_seeds_count();

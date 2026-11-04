@@ -23,7 +23,7 @@ JOBS ?= 4
 BUILD_JOBS ?= $(shell nproc)
 
 .PHONY: all help $(PLATFORMS) $(SHARED_PLATFORMS) $(addprefix env-,$(PLATFORMS)) env envs pull pull-all push push-all \
-	local-env local test test-public lint format binaries clean distclean
+	local-env local test test-public lint format web web-check binaries clean distclean
 
 all:
 	$(MAKE) -j$(JOBS) --output-sync=target BUILD_JOBS=$$(( $$(nproc) / $(JOBS) + 1 )) $(PLATFORMS) $(SHARED_PLATFORMS)
@@ -40,7 +40,11 @@ help:
 	@echo "Checks:"
 	@echo "  test                 Unit tests in the linux-x64 image, then tests/smoke_test.sh on the host (needs curl and python3)"
 	@echo "  test-public          tests/public_test.sh with a public torrent from the internet (LT2HTTP=<binary>, default: the local build)"
-	@echo "  lint                 clang-format and shellcheck checks ('make format' fixes the formatting)"
+	@echo "  lint                 clang-format, shellcheck and translation checks ('make format' fixes the formatting)"
+	@echo
+	@echo "Web UI (needs Node.js):"
+	@echo "  web                  Build web/src/ into web/dist/, which is in git and built into the binary"
+	@echo "  web-check            Type and format checks, and that web/dist/ is built from the current web/src/"
 	@echo
 	@echo "Images:"
 	@echo "  env PLATFORM=<p>     Build the dependencies image for a platform (envs: all of them)"
@@ -138,6 +142,16 @@ LT2HTTP ?= $(BUILD_DIR)/cmake/local/lt2http
 test-public:
 	tests/public_test.sh "$(LT2HTTP)"
 
+# Web UI: web/src/ (TypeScript, React, Mantine) is built into web/dist/, which is in git, so building lt2http needs no Node.js
+web:
+	cd web && npm ci && npm run build
+
+web-check: web
+	cd web && npm run check
+	@if [ -n "$$($(GIT) status --porcelain -- web/dist)" ]; then \
+		$(GIT) status --short -- web/dist; \
+		echo "web/dist/ is not built from the current web/src/: run make web and commit web/dist/"; exit 1; fi
+
 # CI pins the versions: pip install clang-format==19.1.7 shellcheck-py==0.10.0.1
 CLANG_FORMAT ?= clang-format
 FORMAT_FILES = $(shell $(GIT) ls-files 'src/*.h' 'src/*.cpp' 'tests/*.cpp' ':!:src/external')
@@ -146,6 +160,7 @@ SHELL_FILES = $(shell $(GIT) ls-files '*.sh' ':!:src/external')
 lint:
 	$(CLANG_FORMAT) --style=file --dry-run --Werror $(FORMAT_FILES)
 	shellcheck --external-sources --source-path=SCRIPTDIR $(SHELL_FILES)
+	python3 -I tests/check_i18n.py
 
 format:
 	$(CLANG_FORMAT) --style=file -i $(FORMAT_FILES)

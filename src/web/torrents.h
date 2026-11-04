@@ -8,6 +8,7 @@
 
 #include <dto/error.h>
 #include <dto/file_info.h>
+#include <dto/torrent_details.h>
 #include <dto/torrent_info.h>
 #include <dto/torrent_operation.h>
 
@@ -32,15 +33,19 @@ class TorrentsController : public lh::Controller {
             "Define whether we need to include torrent status fields. Values: true/false. Default: false";
         info->queryParams.add<String>("status").required = false;
 
+        info->queryParams.add<String>("lang").description = "Language of state_localized, like de_de. Default: the language setting";
+        info->queryParams.add<String>("lang").required = false;
+
         info->addResponse<List<Object<TorrentInfoDto>>>(Status::CODE_200, "application/json");
         info->addResponse<Object<ErrorDto>>(Status::CODE_500, "application/json");
     }
-    ENDPOINT("GET", "/torrents", list, QUERY(String, status_param, "status", "false")) {
+    ENDPOINT("GET", "/torrents", list, QUERY(String, status_param, "status", "false"), QUERY(String, lang_param, "lang", "")) {
         return operation<ErrorDto>("TorrentsController::list", [&] {
             auto is_status = lh::is_true(status_param);
+            auto lang = lh::language_from_param(lang_param);
             auto list = oatpp::List<oatpp::Object<TorrentInfoDto>>::createShared();
             for (const auto &torrent : lh::session().torrents())
-                list->push_back(torrentInfoDtoFromTorrent(torrent, is_status));
+                list->push_back(torrentInfoDtoFromTorrent(torrent, is_status, lang));
 
             return createDtoResponse(Status::CODE_200, list);
         });
@@ -112,15 +117,19 @@ class TorrentsController : public lh::Controller {
             "Define whether we need to include torrent status fields. Values: true/false. Default: false";
         info->queryParams.add<String>("status").required = false;
 
+        info->queryParams.add<String>("lang").description = "Language of state_localized, like de_de. Default: the language setting";
+        info->queryParams.add<String>("lang").required = false;
+
         info->addResponse<Object<TorrentInfoDto>>(Status::CODE_200, "application/json");
         info->addResponse<Object<TorrentOperationDto>>(Status::CODE_500, "application/json");
     }
-    ENDPOINT("GET", "/torrents/{infoHash}/info", info, PATH(String, hash_param, "infoHash"),
-             QUERY(String, status_param, "status", "false")) {
+    ENDPOINT("GET", "/torrents/{infoHash}/info", info, PATH(String, hash_param, "infoHash"), QUERY(String, status_param, "status", "false"),
+             QUERY(String, lang_param, "lang", "")) {
         return torrentOperation("TorrentsController::info", hash_param, [&](const std::string &hash) {
             OATPP_LOGI("TorrentsController::info", "Getting torrent info with infohash: %s", hash.c_str())
             auto torrent = lh::session().get_torrent(hash);
-            return createDtoResponse(Status::CODE_200, torrentInfoDtoFromTorrent(torrent, lh::is_true(status_param)));
+            return createDtoResponse(Status::CODE_200,
+                                     torrentInfoDtoFromTorrent(torrent, lh::is_true(status_param), lh::language_from_param(lang_param)));
         });
     }
 
@@ -129,14 +138,17 @@ class TorrentsController : public lh::Controller {
 
         info->pathParams.add<String>("infoHash").description = "Torrent InfoHash";
 
+        info->queryParams.add<String>("lang").description = "Language of state_localized, like de_de. Default: the language setting";
+        info->queryParams.add<String>("lang").required = false;
+
         info->addResponse<Object<TorrentStatusDto>>(Status::CODE_200, "application/json");
         info->addResponse<Object<TorrentOperationDto>>(Status::CODE_500, "application/json");
     }
-    ENDPOINT("GET", "/torrents/{infoHash}/status", status, PATH(String, hash_param, "infoHash")) {
+    ENDPOINT("GET", "/torrents/{infoHash}/status", status, PATH(String, hash_param, "infoHash"), QUERY(String, lang_param, "lang", "")) {
         return torrentOperation("TorrentsController::status", hash_param, [&](const std::string &hash) {
             OATPP_LOGI("TorrentsController::status", "Getting torrent status with infohash: %s", hash.c_str())
             auto torrent = lh::session().get_torrent(hash);
-            return createDtoResponse(Status::CODE_200, torrentStatusDtoFromTorrent(torrent));
+            return createDtoResponse(Status::CODE_200, torrentStatusDtoFromTorrent(torrent, lh::language_from_param(lang_param)));
         });
     }
 
@@ -258,6 +270,34 @@ class TorrentsController : public lh::Controller {
             torrent->remove_player();
             OATPP_LOGI("TorrentsController::remove_player", "Torrent %s has %d players", hash.c_str(), torrent->players())
             return torrentSuccess(hash);
+        });
+    }
+
+    ENDPOINT_INFO(trackers) {
+        info->summary = "Get trackers (and DHT) of torrent, identified by InfoHash";
+
+        info->pathParams.add<String>("infoHash").description = "Torrent InfoHash";
+
+        info->addResponse<List<Object<TrackerStatusDto>>>(Status::CODE_200, "application/json");
+        info->addResponse<Object<TorrentOperationDto>>(Status::CODE_500, "application/json");
+    }
+    ENDPOINT("GET", "/torrents/{infoHash}/trackers", trackers, PATH(String, hash_param, "infoHash")) {
+        return torrentOperation("TorrentsController::trackers", hash_param, [&](const std::string &hash) {
+            return createDtoResponse(Status::CODE_200, trackersDtoFromTorrent(lh::session().get_torrent(hash)));
+        });
+    }
+
+    ENDPOINT_INFO(pieces) {
+        info->summary = "Get pieces state of torrent, identified by InfoHash";
+
+        info->pathParams.add<String>("infoHash").description = "Torrent InfoHash";
+
+        info->addResponse<Object<PiecesStatusDto>>(Status::CODE_200, "application/json");
+        info->addResponse<Object<TorrentOperationDto>>(Status::CODE_500, "application/json");
+    }
+    ENDPOINT("GET", "/torrents/{infoHash}/pieces", pieces, PATH(String, hash_param, "infoHash")) {
+        return torrentOperation("TorrentsController::pieces", hash_param, [&](const std::string &hash) {
+            return createDtoResponse(Status::CODE_200, piecesDtoFromTorrent(lh::session().get_torrent(hash)));
         });
     }
 };

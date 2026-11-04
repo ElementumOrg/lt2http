@@ -31,6 +31,15 @@ jobs:
       - name: Lint
         run: make lint
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      # Types, formatting, and web/dist/ built from the current web/src/
+      - name: Check Web UI
+        run: make web-check
+
   test:
     name: Test
     runs-on: ubuntu-latest

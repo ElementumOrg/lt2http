@@ -22,25 +22,6 @@ class MiscController : public oatpp::web::server::api::ApiController {
         return std::make_shared<MiscController>(objectMapper);
     }
 
-    ENDPOINT_INFO(index) {
-        info->summary = "Index";
-
-        info->addResponse<String>(Status::CODE_200, "text/html");
-    }
-    ENDPOINT("GET", "/", index) {
-        const char *html = "<html lang='en'>"
-                           "  <head>"
-                           "    <meta charset=utf-8/>"
-                           "  </head>"
-                           "  <body>"
-                           "    <a href='swagger/ui'>Checkout Swagger-UI page</a>"
-                           "  </body>"
-                           "</html>";
-        auto response = createResponse(Status::CODE_200, html);
-        response->putHeader(Header::CONTENT_TYPE, "text/html");
-        return response;
-    }
-
     ENDPOINT_INFO(changelog) {
         info->summary = "Changelog";
 

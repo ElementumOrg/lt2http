@@ -36,6 +36,33 @@ struct TrackerInfo {
 
 class Session;
 
+struct TrackerStatus {
+    std::string url;
+    // -1 for DHT
+    int tier = -1;
+    // working, updating, failed, not_contacted or off
+    std::string status;
+    int fails = 0;
+    // -1 when unknown
+    int seeds = -1;
+    int peers = -1;
+    int downloaded = -1;
+    // Seconds
+    int next_announce = -1;
+    std::string message;
+};
+
+struct PiecesStatus {
+    // A character per piece: * stored and read by a stream, ? wanted by a stream, + stored, ~ downloading,
+    // 1-7 queued with that priority, - not wanted
+    std::string map;
+    int total = 0;
+    int stored = 0;
+    int downloading = 0;
+    int prioritized = 0;
+    int readers = 0;
+};
+
 // Torrent state read by HTTP and background threads. The alerts thread replaces it as a whole,
 // so readers never call libtorrent for it and never see a half updated state.
 struct TorrentSnapshot {
@@ -126,6 +153,8 @@ class Torrent : public std::enable_shared_from_this<lh::Torrent> {
     const std::string &hash() const;
     std::string name() const;
     std::int64_t size() const;
+    // Folder of the files on disk, empty for memory storage
+    std::string download_path() const;
     int piece_length() const;
     int piece_length_at(int index) const;
     int pieces_count() const;
@@ -189,7 +218,11 @@ class Torrent : public std::enable_shared_from_this<lh::Torrent> {
     void pause();
     void resume();
 
-    void dump(std::stringstream &ss, bool is_files, bool is_trackers, bool is_pieces);
+    // Trackers, with DHT last
+    std::vector<TrackerStatus> trackers_status() const;
+    PiecesStatus pieces_status() const;
+    // The torrent for /info, in a language like en_gb
+    void dump(std::stringstream &ss, bool is_files, bool is_trackers, bool is_pieces, const std::string &lang);
 
     void save_resume_data() const;
     // Saves requested, their save_resume_data(_failed)_alert not handled yet

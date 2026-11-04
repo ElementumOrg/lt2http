@@ -93,6 +93,14 @@ inline std::string html_escape(const std::string &input) {
     return result;
 }
 
+// Pads with spaces to a width in characters (not UTF-8 bytes), to line up columns of translated text
+inline std::string pad_right(const std::string &text, std::size_t width) {
+    std::size_t length = 0;
+    for (unsigned char c : text)
+        length += (c & 0xC0) != 0x80;
+    return length >= width ? text + " " : text + std::string(width - length, ' ');
+}
+
 inline std::string get_file_ext(const std::string &s) {
     auto i = s.rfind('.');
     return i == std::string::npos ? "" : s.substr(i + 1);

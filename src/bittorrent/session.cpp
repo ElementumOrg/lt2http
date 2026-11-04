@@ -1080,6 +1080,7 @@ void Session::handle_metadata_received_alert(const lt::metadata_received_alert *
 void Session::handle_session_stats_alert(const lt::session_stats_alert *p) {
     auto counters = p->counters();
 
+    std::scoped_lock guard(m_statsMutex);
     m_session_stats.clear();
     for (const auto &metric : lt::session_stats_metrics())
         m_session_stats[metric.name] = counters[metric.value_index];
@@ -1107,6 +1108,17 @@ void Session::trigger_resume_data() {
         torrent->save_resume_data();
     }
 }
+
+lt::settings_pack Session::native_settings() const { return m_nativeSession->get_settings(); }
+
+std::map<std::string, std::int64_t> Session::session_stats() const {
+    std::scoped_lock guard(m_statsMutex);
+    return m_session_stats;
+}
+
+int Session::listen_port() const { return m_nativeSession->listen_port(); }
+
+bool Session::is_dht_running() const { return m_nativeSession->is_dht_running(); }
 
 std::int64_t Session::memory_size() const { return std::int64_t(m_config.memory_size) * 1024 * 1024; }
 

@@ -26,7 +26,9 @@ class Session {
     std::shared_ptr<lt::session> m_nativeSession = nullptr;
     lt::settings_pack m_pack;
 
+    // Written by the alerts thread
     std::map<std::string, std::int64_t> m_session_stats;
+    mutable std::mutex m_statsMutex;
     std::map<int, std::vector<lt::port_mapping_t>> m_mapped_ports;
     std::vector<NatMapping> m_nat_mappings;
     // Guards m_pack, m_config and the port mappings, which the NAT-PMP thread changes too
@@ -105,6 +107,12 @@ class Session {
     void trigger_resume_data();
 
     std::int64_t memory_size() const;
+
+    // For /settings/state
+    lt::settings_pack native_settings() const;
+    std::map<std::string, std::int64_t> session_stats() const;
+    int listen_port() const;
+    bool is_dht_running() const;
 
     bool is_paused() const;
     void pause();

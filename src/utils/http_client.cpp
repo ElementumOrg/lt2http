@@ -3,7 +3,7 @@
 #define CPPHTTPLIB_OPENSSL_SUPPORT
 #include "httplib.h"
 
-std::optional<HttpResponse> do_request(const std::string &uri) {
+std::optional<HttpResponse> do_request(const std::string &uri, const std::vector<std::pair<std::string, std::string>> &headers) {
     // httplib takes "scheme://host:port" and the path separately.
     auto scheme_end = uri.find("://");
     auto path_start = uri.find('/', scheme_end == std::string::npos ? 0 : scheme_end + 3);
@@ -18,7 +18,7 @@ std::optional<HttpResponse> do_request(const std::string &uri) {
     cli.set_connection_timeout(10);
     cli.set_read_timeout(30);
 
-    auto res = cli.Get(path.substr(0, path.find('#')).c_str());
+    auto res = cli.Get(path.substr(0, path.find('#')), httplib::Headers(headers.begin(), headers.end()));
     if (!res)
         return std::nullopt;
     return HttpResponse{res->status, std::move(res->body)};

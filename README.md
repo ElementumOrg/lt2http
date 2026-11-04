@@ -20,6 +20,16 @@ $ lt2http --write=lt2http.json      # writes the current settings to a file and 
 `--config` with `--update` creates or updates the file with all settings. Torrent and resume files are kept in `torrents_path` (default: the current folder).
 Requests from `127.0.0.1` never need authentication, others do when `web_login` or `web_password` is set.
 
+Web UI: `http://<host>:65225/web/` (`/` opens it). It is built into the binary, so it works without any other files: add torrents
+(magnet, link to a .torrent file, with request headers as `https://host/file.torrent|Cookie=a=b|User-Agent=Kodi`, or upload),
+choose the storage and the files to download, see torrents with their files, trackers and pieces, copy file links to play or
+download, remove torrents with or without their data, and see the settings (without passwords), libtorrent settings and state.
+It is translated into the languages of Elementum, `web/public/i18n/` has the texts.
+
+The Web UI is TypeScript with React and Mantine in `web/src/`. It is built into `web/dist/`, which is in git and built into
+the binary, so building lt2http does not need Node.js. After changing `web/src/` or a translation, run `make web` (needs
+Node.js) and commit `web/dist/`. `cd web && npm run dev` serves it with live reload, using an lt2http on port 65225.
+
 Main API endpoints (see Swagger for all of them and their parameters):
 - `/status`, `/info`, `/pause`, `/resume` - session state and control
 - `/service/add/uri`, `/service/add/file` - add a torrent by magnet, URL, local path or uploaded file
@@ -29,7 +39,11 @@ Main API endpoints (see Swagger for all of them and their parameters):
 - `/torrents/{infoHash}/files/download`, `/files/stop`, `/files/{index}/set_priority` - choose what to download
 - `/torrents/{infoHash}/meta_info` - free JSON kept with the torrent (GET to read, POST to set, `null` removes it)
 - `/torrents/{infoHash}/players/add`, `/players/remove` - register players, the torrent state is "Playing" while it has any. Players are removed after `player_timeout` seconds (default 60) without stream connections, like when Kodi crashes
+- `/torrents/{infoHash}/trackers`, `/torrents/{infoHash}/pieces` - trackers and pieces state
 - `/settings/get`, `/settings/set` - read and change settings at runtime
+- `/settings/state` - settings without passwords, libtorrent settings, session state and statistics
+- `/languages` - translations of the Web UI, `/info` and of `state_localized` (the `lang` parameter of `/info` and the torrent
+  endpoints, or the `language` setting, picks one, like `de` or `pt-br`; `state_string` stays the same in every language)
 - `/shutdown` - stop gracefully (exit code 0)
 
 Tests

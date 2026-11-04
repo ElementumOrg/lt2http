@@ -2,7 +2,13 @@
 
 ## 0.0.17 (2026-11-03)
 - Downloading uses about 40% less CPU: libtorrent ran 4 disk threads per CPU core (64 on a 16-core machine), and woke them all for every block written. It now runs 4.
-- Passwords are no longer written to the log at startup.
+- Added a Web UI at `/web/` (`/` opens it), built into the binary: add torrents by magnet, link (with request headers after `|`) or upload, with a choice of storage and of the files to download, see and control torrents, files, trackers and pieces, copy file links, remove torrents with or without data and torrent information, see the settings, libtorrent settings and state.
+- lt2http is translated into the 22 languages of Elementum: `/info`, the Web UI and the new `state_localized` of torrent status, picked with the `lang` parameter or the `language` setting. `state_string` stays the same in every language.
+- Added `/torrents/{infoHash}/trackers`, `/torrents/{infoHash}/pieces`, `/settings/state` and `/languages`. Torrent status has `connections` and `connections_limit`, torrent info has `piece_length` and `download_path` (the folder of the files on disk), which the Web UI shows.
+- Adding a torrent by link or upload reports when the data is not a torrent.
+- Passwords are no longer written to the log at startup, and `/settings/state` hides them.
+- JSON responses keep non-ASCII text and `/` as they are, instead of `\uXXXX` and `\/`.
+- Add-on: translations for all languages of Elementum, Polish and Slovenian added. lt2http uses the language of Kodi.
 - Torrent states are the same as in Elementum: Queued, Checking, Finding, Downloading, Finished, Seeding, Stalled, Paused, Buffering, Playing (and Error), with the same numbers.
 - Added `/torrents/{infoHash}/meta_info`: any JSON set by a client is kept with the torrent (also after a restart), and returned in `/torrents` and `/torrents/{infoHash}/info`.
 - Added `/torrents/{infoHash}/files/{index}/buffer` to download a part of a file first, from any position, with the end of the file.

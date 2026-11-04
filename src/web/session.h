@@ -19,6 +19,7 @@
 #include <utils/exceptions.h>
 #include <utils/http_client.h>
 #include <utils/path.h>
+#include <utils/requests.h>
 #include <utils/strings.h>
 
 #include "web/controller.h"
@@ -43,6 +44,16 @@ class SessionController : public lh::Controller {
         return createDtoResponse(Status::CODE_200, dto);
     }
 
+    // A torrent file, or a magnet link in a file
+    static void check_torrent(const std::string &data) {
+        if (data.rfind("magnet:", 0) == 0)
+            return;
+        lt::error_code ec;
+        lt::torrent_info info(data.data(), int(data.size()), ec);
+        if (ec)
+            throw lh::Exception("Not a torrent file: " + ec.message());
+    }
+
     static std::string temporary_torrent_path() {
         return path_append(lh::config().torrents_path, "tmp_" + get_random_numeric(10) + ".torrent");
     }
@@ -62,6 +73,9 @@ class SessionController : public lh::Controller {
         info->queryParams.add<String>("torrent").description = "Show only the torrent with this InfoHash";
         info->queryParams.add<String>("torrent").required = false;
 
+        info->queryParams.add<String>("lang").description = "Language, like de_de. Default: the language setting";
+        info->queryParams.add<String>("lang").required = false;
+
         for (const char *section : {"files", "trackers", "pieces"}) {
             info->queryParams.add<String>(section).description = Fmt("Show %s. Values: true/false. Default: true", section);
             info->queryParams.add<String>(section).required = false;
@@ -70,8 +84,11 @@ class SessionController : public lh::Controller {
         info->addResponse<String>(Status::CODE_200, "text/html");
     }
     ENDPOINT("GET", "/info", info, QUERY(String, torrent_param, "torrent", ""), QUERY(String, files_param, "files", "true"),
-             QUERY(String, trackers_param, "trackers", "true"), QUERY(String, pieces_param, "pieces", "true")) {
+             QUERY(String, trackers_param, "trackers", "true"), QUERY(String, pieces_param, "pieces", "true"),
+             QUERY(String, lang_param, "lang", "")) {
         auto hash = lh::hash_from_param(torrent_param);
+        auto lang = lh::language_from_param(lang_param);
+        auto tr = [&lang](const char *key) { return html_escape(lh::translate(lang, key)); };
 
         std::stringstream ss;
         ss << "<!DOCTYPE html><html lang=\"en-US\"><head>"
@@ -89,15 +106,20 @@ function act(url, question) {
            << "</head><body><pre>"
            << Fmt("    lt2http %s (commit %s), libtorrent %s (%s)\n", lh::VERSION.c_str(), lh::COMMIT.c_str(), LIBTORRENT_VERSION,
                   LIBTORRENT_REVISION)
-           << R"(    Show: <a href="/info">All torrents</a> | <a href="/info?files=false&trackers=false&pieces=false">Summary</a>)"
-           << "\n\n</pre>";
+           << "    " << tr("info.show") << Fmt(R"(: <a href="/info?lang=%s">%s</a>)", lang.c_str(), tr("info.all_torrents").c_str())
+           << Fmt(R"( | <a href="/info?files=false&trackers=false&pieces=false&lang=%s">%s</a>)", lang.c_str(), tr("info.summary").c_str())
+           << R"( | <a href="/web/">Web UI</a>)"
+           << "\n    " << tr("info.language") << ":";
+        for (const auto &language : lh::languages())
+            ss << Fmt(R"( <a href="/info?lang=%s">%s</a>)", language.code.c_str(), html_escape(language.name).c_str());
+        ss << "\n\n</pre>";
 
         for (const auto &torrent : lh::session().torrents()) {
             if (!hash.empty() && hash != torrent->hash())
                 continue;
 
             ss << "<pre>";
-            torrent->dump(ss, lh::is_true(files_param), lh::is_true(trackers_param), lh::is_true(pieces_param));
+            torrent->dump(ss, lh::is_true(files_param), lh::is_true(trackers_param), lh::is_true(pieces_param), lang);
             ss << "</pre>";
         }
 
@@ -174,6 +196,9 @@ function act(url, question) {
             if (!file)
                 throw std::invalid_argument("Request has no 'file' part");
             auto data = file->getPayload()->getInMemoryData();
+            if (!data)
+                throw std::invalid_argument("The 'file' part is empty");
+            check_torrent(*data);
             auto uri = temporary_torrent_path();
 
             OATPP_LOGI("SessionController::add_file", "Saving uploaded file to: %s", uri.c_str())
@@ -187,7 +212,9 @@ function act(url, question) {
     ENDPOINT_INFO(add_uri) {
         info->summary = "Add torrent by providing magnet uri, uri to a torrent file or path to a local file";
 
-        info->queryParams.add<String>("uri").description = "Magnet uri or path to local file or http(s) link";
+        info->queryParams.add<String>("uri").description =
+            "Magnet uri or path to local file or http(s) link. Headers for the http(s) request can follow the link: "
+            "http://host/file.torrent|Cookie=a=b|User-Agent=Kodi";
         info->queryParams.add<String>("uri").required = true;
 
         info->queryParams.add<String>("storage").description =
@@ -204,13 +231,17 @@ function act(url, question) {
             auto storage = lh::from_string<lh::storage_type_t, lh::js_storage_type_t_string_struct>(*storage_param);
 
             if (uri.rfind("http", 0) == 0) {
-                OATPP_LOGI("SessionController::add_uri", "Downloading torrent file from: %s", uri.c_str());
+                auto [url, headers] = split_url_headers(uri);
+                uri = url;
+                OATPP_LOGI("SessionController::add_uri", "Downloading torrent file from: %s, with %d headers", uri.c_str(),
+                           int(headers.size()));
 
-                auto res = do_request(uri);
+                auto res = do_request(uri, headers);
                 if (!res)
                     throw lh::Exception(Fmt("Could not download file from url '%s'. Response: null", uri.c_str()));
                 if (res->status != 200)
                     throw lh::Exception(Fmt("Could not download file from url '%s'. Status: %d", uri.c_str(), res->status));
+                check_torrent(res->body);
 
                 uri = temporary_torrent_path();
 

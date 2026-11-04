@@ -16,6 +16,7 @@ ControllerPtr createSessionController();
 ControllerPtr createTorrentsController();
 ControllerPtr createFilesController();
 ControllerPtr createStreamController();
+ControllerPtr createUiController();
 ControllerPtr createSwaggerController(const oatpp::web::server::api::Endpoints &endpoints);
 
 } // namespace lh

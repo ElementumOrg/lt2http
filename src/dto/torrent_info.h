@@ -23,6 +23,12 @@ class TorrentInfoDto : public oatpp::DTO {
     DTO_FIELD_INFO(size) { info->description = "Total torrent size (bytes)"; }
     DTO_FIELD(Int64, size);
 
+    DTO_FIELD_INFO(download_path) { info->description = "Folder of the files on disk, null for memory storage"; }
+    DTO_FIELD(String, download_path);
+
+    DTO_FIELD_INFO(piece_length) { info->description = "Piece size (bytes), -1 without metadata"; }
+    DTO_FIELD(Int32, piece_length);
+
     DTO_FIELD_INFO(has_metadata) { info->description = "Does this torrent have metadata (bool)"; }
     DTO_FIELD(Boolean, has_metadata);
 
@@ -69,12 +75,17 @@ inline oatpp::Any metaInfoFromJson(const std::string &json) {
     }
 }
 
-inline oatpp::Object<TorrentInfoDto> torrentInfoDtoFromTorrent(const std::shared_ptr<lh::Torrent> &torrent, bool is_status) {
+// lang: a language like en_gb, for the localized state
+inline oatpp::Object<TorrentInfoDto> torrentInfoDtoFromTorrent(const std::shared_ptr<lh::Torrent> &torrent, bool is_status,
+                                                               const std::string &lang) {
     auto dto = TorrentInfoDto::createShared();
 
     dto->hash = torrent->hash();
     dto->name = torrent->name();
     dto->size = torrent->size();
+    if (auto path = torrent->download_path(); !path.empty())
+        dto->download_path = path;
+    dto->piece_length = torrent->piece_length();
     dto->has_metadata = torrent->has_metadata();
     dto->is_memory_storage = torrent->is_memory_storage();
     if (torrent->is_memory_storage())
@@ -87,7 +98,7 @@ inline oatpp::Object<TorrentInfoDto> torrentInfoDtoFromTorrent(const std::shared
     dto->meta_info = metaInfoFromJson(torrent->meta_info());
 
     if (is_status)
-        dto->torrent_status = torrentStatusDtoFromTorrent(torrent);
+        dto->torrent_status = torrentStatusDtoFromTorrent(torrent, lang);
 
     return dto;
 }

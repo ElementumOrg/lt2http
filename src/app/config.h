@@ -77,6 +77,8 @@ struct Config {
     std::string web_login;
     std::string web_password;
     int web_port = 65225;
+    // Language of /info and of state_localized in the API, like de_de, the lang query parameter overrides it
+    std::string language = "en_gb";
 
     storage_type_t download_storage = storage_type_t::memory;
 
@@ -168,7 +170,7 @@ struct Config {
         return copy;
     }
 
-    JS_OBJECT(JS_MEMBER(web_interface), JS_MEMBER(web_port),
+    JS_OBJECT(JS_MEMBER(web_interface), JS_MEMBER(web_port), JS_MEMBER(language),
 
               JS_MEMBER(download_storage), JS_MEMBER(auto_memory_size), JS_MEMBER(auto_memory_size_strategy), JS_MEMBER(memory_size),
               JS_MEMBER(auto_adjust_memory_size),

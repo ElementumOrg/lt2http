@@ -41,7 +41,7 @@ void Application::run() {
     auto router = components.httpRouter.getObject();
     oatpp::web::server::api::Endpoints docEndpoints;
     for (const auto &controller : {createSettingsController(), createMiscController(), createSessionController(),
-                                   createTorrentsController(), createFilesController(), createStreamController()})
+                                   createTorrentsController(), createFilesController(), createStreamController(), createUiController()})
         docEndpoints.append(router->addController(controller)->getEndpoints());
 
     router->addController(createSwaggerController(docEndpoints));

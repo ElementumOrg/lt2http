@@ -35,8 +35,8 @@ if ! curl -sf -m 30 -o "$WORK/bbb.torrent" "$TORRENT_URL"; then
     exit 2
 fi
 
-add() { # add <storage>: adds the torrent by its URL
-    curl -s -m 60 --get --data-urlencode "uri=$TORRENT_URL" --data "storage=$1" "$U/service/add/uri"
+add() { # add <storage>: adds the torrent by its URL, with a header for the request
+    curl -s -m 60 --get --data-urlencode "uri=$TORRENT_URL|User-Agent=lt2http-test" --data "storage=$1" "$U/service/add/uri"
 }
 
 echo "== Add"
@@ -52,6 +52,9 @@ FILES=$(get "$T/files")
 check "files" contains "$FILES" '"name":"Big Buck Bunny.mp4"'
 check "file size" contains "$FILES" "\"size\":$POSTER_SIZE"
 check "info page" contains "$(get "$U/info?torrent=$HASH")" "poster.jpg"
+check "trackers" contains "$(get "$T/trackers")" '"url":"udp://tracker.leechers-paradise.org:6969","tier":0'
+check "pieces" contains "$(get "$T/pieces")" '"total":1055'
+check "download path of a folder" contains "$(get "$T/info")" "\"download_path\":\"$DOWNLOADS/Big Buck Bunny\""
 
 echo "== Meta info"
 check "no meta info" equals "$(get "$T/meta_info")" "null"

@@ -7,7 +7,11 @@
 
 #include <json_struct/json_struct.h>
 
+#include <libtorrent/settings_pack.hpp>
+#include <libtorrent/version.hpp>
+
 #include <app/application.h>
+#include <app/build_info.h>
 
 #include OATPP_CODEGEN_BEGIN(ApiController)
 
@@ -52,6 +56,58 @@ class SettingsController : public oatpp::web::server::api::ApiController {
         auto response = createResponse(Status::CODE_200, oatpp::String(JS::serializeStruct(config).c_str()));
         response->putHeader(Header::CONTENT_TYPE, "application/json");
         return response;
+    }
+
+    ENDPOINT_INFO(state) {
+        info->summary = "Get lt2http settings (without passwords), libtorrent settings and session state";
+
+        info->addResponse<String>(Status::CODE_200, "application/json");
+    }
+    ENDPOINT("GET", "/settings/state", state) {
+        using Fields = oatpp::Fields<oatpp::Any>;
+        auto &session = lh::session();
+
+        auto libtorrent = Fields::createShared();
+        auto const pack = session.native_settings();
+        auto add_settings = [&](int base, int count, auto value_of) {
+            for (int i = base; i < base + count; i++) {
+                const char *name = lt::name_for_setting(i);
+                // Deprecated settings have no name
+                if (name && *name)
+                    libtorrent->push_back({name, value_of(i)});
+            }
+        };
+        add_settings(lt::settings_pack::string_type_base, lt::settings_pack::num_string_settings, [&pack](int i) {
+            // Credentials of the proxy
+            bool const is_secret = i == lt::settings_pack::proxy_username || i == lt::settings_pack::proxy_password;
+            return oatpp::Any(oatpp::String(is_secret && !pack.get_str(i).empty() ? "***" : pack.get_str(i)));
+        });
+        add_settings(lt::settings_pack::int_type_base, lt::settings_pack::num_int_settings,
+                     [&pack](int i) { return oatpp::Any(oatpp::Int64(pack.get_int(i))); });
+        add_settings(lt::settings_pack::bool_type_base, lt::settings_pack::num_bool_settings,
+                     [&pack](int i) { return oatpp::Any(oatpp::Boolean(pack.get_bool(i))); });
+
+        auto stats = Fields::createShared();
+        for (const auto &[name, value] : session.session_stats())
+            stats->push_back({name, oatpp::Any(oatpp::Int64(value))});
+
+        auto state = Fields::createShared();
+        state->push_back({"version", oatpp::Any(oatpp::String(lh::VERSION))});
+        state->push_back({"commit", oatpp::Any(oatpp::String(lh::COMMIT))});
+        state->push_back({"libtorrent_version", oatpp::Any(oatpp::String(LIBTORRENT_VERSION))});
+        state->push_back({"user_agent", oatpp::Any(oatpp::String(session.get_user_agent()))});
+        state->push_back({"is_paused", oatpp::Any(oatpp::Boolean(session.is_paused()))});
+        state->push_back({"torrents_count", oatpp::Any(oatpp::Int64(std::int64_t(session.torrents().size())))});
+        state->push_back({"listen_port", oatpp::Any(oatpp::Int64(session.listen_port()))});
+        state->push_back({"is_dht_running", oatpp::Any(oatpp::Boolean(session.is_dht_running()))});
+        state->push_back({"memory_size", oatpp::Any(oatpp::Int64(session.memory_size()))});
+        state->push_back({"stats", oatpp::Any(stats)});
+
+        auto result = Fields::createShared();
+        result->push_back({"lt2http", getDefaultObjectMapper()->readFromString<oatpp::Any>(JS::serializeStruct(lh::config().masked()))});
+        result->push_back({"libtorrent", oatpp::Any(libtorrent)});
+        result->push_back({"session", oatpp::Any(state)});
+        return createDtoResponse(Status::CODE_200, result);
     }
 };
 

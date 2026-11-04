@@ -2,6 +2,7 @@
 #include "utils/exceptions.h"
 
 #include <algorithm>
+#include <boost/algorithm/string/replace.hpp>
 #include <libtorrent/bencode.hpp>
 #include <libtorrent/download_priority.hpp>
 #include <libtorrent/storage.hpp>
@@ -13,6 +14,7 @@
 #include <oatpp/core/base/Environment.hpp>
 
 #include <app/application.h>
+#include <app/i18n.h>
 
 #include <bittorrent/file.h>
 #include <bittorrent/reader.h>
@@ -98,6 +100,16 @@ const std::string &Torrent::hash() const { return m_hash; }
 std::int64_t Torrent::size() const {
     auto s = snapshot();
     return s->has_metadata() ? s->info->total_size() : -1;
+}
+
+std::string Torrent::download_path() const {
+    auto s = snapshot();
+    if (is_memory_storage() || s->status.save_path.empty())
+        return "";
+    // Files of a torrent with more than one file are in a folder named like the torrent
+    if (s->has_metadata() && s->info->num_files() > 1)
+        return path_append(s->status.save_path, s->info->name());
+    return s->status.save_path;
 }
 
 int Torrent::piece_length() const {
@@ -475,55 +487,171 @@ void Torrent::update_tracker(const std::string &name, std::string message, int n
     info.numPeers = std::max(number, info.numPeers);
 }
 
-void Torrent::dump(std::stringstream &ss, bool is_files, bool is_trackers, bool is_pieces) {
+std::vector<TrackerStatus> Torrent::trackers_status() const {
+    auto tracker_infos = [this] {
+        std::scoped_lock guard(m_mutex);
+        return m_trackerInfos;
+    }();
+
+    std::vector<TrackerStatus> result;
+    auto const now = lt::clock_type::now();
+    // In tier order, as libtorrent announces to them
+    for (auto &tracker : with_handle([](const lt::torrent_handle &h) { return h.trackers(); })) {
+        TrackerStatus row;
+        row.url = tracker.url;
+        row.tier = tracker.tier;
+        bool is_updating = false;
+        bool is_working = false;
+
+        for (auto &endpoint : tracker.endpoints) {
+            row.seeds = std::max(row.seeds, endpoint.scrape_complete);
+            row.peers = std::max(row.peers, endpoint.scrape_incomplete);
+            row.downloaded = std::max(row.downloaded, endpoint.scrape_downloaded);
+            row.fails = std::max(row.fails, int(endpoint.fails));
+            is_updating = is_updating || endpoint.updating;
+            is_working = is_working || endpoint.is_working();
+            if (endpoint.enabled) {
+                auto in = int(std::chrono::duration_cast<std::chrono::seconds>(endpoint.next_announce - now).count());
+                if (in >= 0 && (row.next_announce < 0 || in < row.next_announce))
+                    row.next_announce = in;
+            }
+            if (endpoint.last_error)
+                row.message = endpoint.last_error.message();
+            else if (!endpoint.message.empty() && row.message.empty())
+                row.message = endpoint.message;
+        }
+
+        if (auto info = tracker_infos.find(tracker.url); info != tracker_infos.end()) {
+            if (row.peers == -1)
+                row.peers = info->second.numPeers;
+            if (row.message.empty())
+                row.message = info->second.lastMessage;
+        }
+
+        row.status = is_updating ? "updating" : is_working ? "working" : row.fails > 0 ? "failed" : "not_contacted";
+        result.push_back(std::move(row));
+    }
+
+    if (auto dht = tracker_infos.find("DHT"); dht != tracker_infos.end()) {
+        TrackerStatus row;
+        row.url = "DHT";
+        row.status = snapshot()->status.announcing_to_dht ? "working" : "off";
+        row.peers = dht->second.numPeers;
+        row.message = dht->second.lastMessage;
+        result.push_back(std::move(row));
+    }
+    return result;
+}
+
+PiecesStatus Torrent::pieces_status() const {
+    PiecesStatus result;
+    auto snap = snapshot();
+    result.total = std::max(0, pieces_count());
+
+    std::vector<int> reader_positions;
+    {
+        std::scoped_lock guard(m_readersMutex);
+        for (const auto &[id, reader] : m_readers)
+            reader_positions.push_back(reader->piece_start());
+    }
+    result.readers = int(reader_positions.size());
+
+    // One call for all priorities and one for the pieces in download, stored pieces come from the snapshot
+    auto piece_priorities = with_handle([](const lt::torrent_handle &h) { return h.get_piece_priorities(); });
+    auto priority_of = [&](int i) { return std::size_t(i) < piece_priorities.size() ? int(piece_priorities[i]) : 0; };
+    auto queue = with_handle([](const lt::torrent_handle &h) {
+        std::vector<lt::partial_piece_info> pieces;
+        h.get_download_queue(pieces);
+        return pieces;
+    });
+    std::vector<bool> is_downloading(std::size_t(result.total));
+    for (const auto &partial : queue) {
+        if (std::size_t(int(partial.piece_index)) < is_downloading.size())
+            is_downloading[int(partial.piece_index)] = true;
+    }
+
+    result.map.reserve(std::size_t(result.total));
+    for (int i = 0; i < result.total; i++) {
+        const bool have = snap->have_piece(i);
+        const int priority = priority_of(i);
+        if (have)
+            result.stored++;
+        if (!have && is_downloading[i])
+            result.downloading++;
+
+        if (std::find(reader_positions.begin(), reader_positions.end(), i) != reader_positions.end()) {
+            result.prioritized++;
+            result.map += have ? '*' : '?';
+        } else if (have) {
+            if (priority > 0)
+                result.prioritized++;
+            result.map += '+';
+        } else if (is_downloading[i]) {
+            result.prioritized++;
+            result.map += '~';
+        } else if (priority == 0) {
+            result.map += '-';
+        } else {
+            result.prioritized++;
+            result.map += char('0' + std::min(priority, 7));
+        }
+    }
+    return result;
+}
+
+void Torrent::dump(std::stringstream &ss, bool is_files, bool is_trackers, bool is_pieces, const std::string &lang) {
     auto yes_no = [](bool value) { return value ? "true" : "false"; };
+    auto tr = [&lang](const char *key, std::initializer_list<std::string> args = {}) { return html_escape(translate(lang, key, args)); };
+    // A translated label padded to the width of the column, so the values line up
+    auto label = [&tr](const char *key, std::size_t width) { return pad_right(tr(key) + ":", width); };
     auto snap = snapshot();
     auto const &status = snap->status;
     const bool is_memory = is_memory_storage();
 
     // Links that run an API call from the page, act() is the script of /info
-    auto action = [this](const std::string &path, const char *title, const char *confirm = "") {
+    auto action = [this, &tr](const std::string &path, const char *title, const char *confirm = nullptr) {
         return Fmt(R"html(<a href="/torrents/%s%s" onclick="return act(this.href, '%s')">%s</a>)html", hash().c_str(), path.c_str(),
-                   confirm, title);
+                   confirm ? tr(confirm).c_str() : "", tr(title).c_str());
     };
 
-    ss << Fmt("    Name:               <b>%s</b> \n", html_escape(name()).c_str());
-    ss << Fmt("    Storage:            %s \n", storage_to_string(m_storageType));
-    ss << Fmt("    Infohash:           %s \n", hash().c_str());
-    ss << Fmt("    Status:             %s \n", state_string().c_str());
-    ss << Fmt("    Pieces count:       %d \n", pieces_count());
-    ss << Fmt("    Piece length:       %s \n", humanize_bytes(piece_length()).c_str());
-    ss << Fmt("    Players:            %d \n", players());
-    ss << Fmt("    Readers:            %d \n", readers_count());
-    ss << "    Actions:            " << (is_paused() ? action("/resume", "Resume") : action("/pause", "Pause"));
+    ss << "    " << label("label.name", 20) << Fmt("<b>%s</b> \n", html_escape(name()).c_str());
+    ss << "    " << label("label.storage", 20) << tr(is_memory ? "storage.memory" : "storage.file") << " \n";
+    ss << "    " << label("label.infohash", 20) << hash() << " \n";
+    ss << "    " << label("label.status", 20) << tr(("state." + state_string()).c_str()) << " \n";
+    ss << "    " << label("label.pieces_count", 20) << pieces_count() << " \n";
+    ss << "    " << label("label.piece_length", 20) << humanize_bytes(piece_length()) << " \n";
+    ss << "    " << label("label.players", 20) << players() << " \n";
+    ss << "    " << label("label.readers", 20) << readers_count() << " \n";
+    ss << "    " << label("label.actions", 20) << (is_paused() ? action("/resume", "action.resume") : action("/pause", "action.pause"));
     if (!is_memory)
-        ss << " | " << action("/files/download", "Download all") << " | " << action("/files/stop", "Stop all");
-    ss << " | " << action("/remove", "Remove", "Remove this torrent?");
+        ss << " | " << action("/files/download", "action.download_all") << " | " << action("/files/stop", "action.stop_all");
+    ss << " | " << action("/remove", "action.remove", "confirm.remove");
     if (!is_memory)
-        ss << " | " << action("/remove?deleteData=true", "Remove with data", "Remove this torrent and its downloaded files?");
-    ss << Fmt(R"( | <a href="/info?torrent=%s">Only this torrent</a>)", hash().c_str()) << "\n";
+        ss << " | " << action("/remove?deleteData=true", "action.remove_with_data", "confirm.remove_with_data");
+    ss << Fmt(R"( | <a href="/info?torrent=%s&lang=%s">%s</a>)", hash().c_str(), lang.c_str(), tr("action.only_this").c_str()) << "\n";
     if (auto meta = meta_info(); !meta.empty())
-        ss << "    <details><summary>Metadata</summary>" << html_escape(meta) << "</details>\n";
+        ss << "    <details><summary>" << tr("label.meta_info") << "</summary>" << html_escape(meta) << "</details>\n";
     ss << "\n";
-    ss << "    Speed:\n";
-    ss << Fmt("        Download:   %s/s \n", humanize_bytes(status.download_payload_rate).c_str());
-    ss << Fmt("        Upload:     %s/s \n", humanize_bytes(status.upload_payload_rate).c_str());
+    ss << "    " << tr("section.speed") << ":\n";
+    ss << "        " << label("label.download", 12) << humanize_bytes(status.download_payload_rate) << "/s \n";
+    ss << "        " << label("label.upload", 12) << humanize_bytes(status.upload_payload_rate) << "/s \n";
     ss << "\n";
-    ss << "    Size:\n";
-    ss << Fmt("        Total:                  %s \n", humanize_bytes(total()).c_str());
-    ss << Fmt("        Done:                   %s (%.2f%%) \n", humanize_bytes(status.total_done).c_str(), progress_total());
-    ss << Fmt("        Wanted:                 %s \n", humanize_bytes(status.total_wanted).c_str());
-    ss << Fmt("        Wanted done:            %s (%.2f%%) \n", humanize_bytes(status.total_wanted_done).c_str(), progress_wanted());
+    ss << "    " << tr("section.size") << ":\n";
+    ss << "        " << label("label.total", 24) << humanize_bytes(total()) << " \n";
+    ss << "        " << label("label.done", 24) << Fmt("%s (%.2f%%) \n", humanize_bytes(status.total_done).c_str(), progress_total());
+    ss << "        " << label("label.wanted", 24) << humanize_bytes(status.total_wanted) << " \n";
+    ss << "        " << label("label.wanted_done", 24)
+       << Fmt("%s (%.2f%%) \n", humanize_bytes(status.total_wanted_done).c_str(), progress_wanted());
     ss << "\n";
-    ss << "    Connections:\n";
-    ss << Fmt("        Connections:            %d \n", status.num_connections);
-    ss << Fmt("        Connections limit:      %d \n", status.connections_limit);
-    ss << Fmt("        Connected seeds:        %d \n", status.num_seeds);
-    ss << Fmt("        Connected peers:        %d \n", status.num_peers);
-    ss << Fmt("        All Seeds:              %d \n", total_seeds_count());
-    ss << Fmt("        All Peers:              %d \n", total_peers_count());
+    ss << "    " << tr("section.connections") << ":\n";
+    ss << "        " << label("label.connections", 24) << status.num_connections << " \n";
+    ss << "        " << label("label.connections_limit", 24) << status.connections_limit << " \n";
+    ss << "        " << label("label.connected_seeds", 24) << status.num_seeds << " \n";
+    ss << "        " << label("label.connected_peers", 24) << status.num_peers << " \n";
+    ss << "        " << label("label.all_seeds", 24) << total_seeds_count() << " \n";
+    ss << "        " << label("label.all_peers", 24) << total_peers_count() << " \n";
 
-    ss << "    Flags:\n";
+    ss << "    " << tr("section.flags") << ":\n";
     ss << Fmt("        paused: %s \n", yes_no(status.flags & lt::torrent_flags::paused));
     ss << Fmt("        auto_managed: %s \n", yes_no(status.flags & lt::torrent_flags::auto_managed));
     ss << Fmt("        sequential_download: %s \n", yes_no(status.flags & lt::torrent_flags::sequential_download));
@@ -539,7 +667,7 @@ void Torrent::dump(std::stringstream &ss, bool is_files, bool is_trackers, bool 
     ss << "\n";
 
     if (is_files) {
-        ss << "    Files:\n";
+        ss << "    " << tr("section.files") << ":\n";
         auto file_priorities = with_handle([](const lt::torrent_handle &h) { return h.get_file_priorities(); });
         auto progress = files_progress();
         for (auto &f : files()) {
@@ -548,20 +676,22 @@ void Torrent::dump(std::stringstream &ss, bool is_files, bool is_trackers, bool 
             const double pg = std::size_t(i) < progress.size() ? progress[i] * 100 : 0;
             auto file_action = [&](const char *path, const char *title) { return action(Fmt("/files/%d/%s", i, path), title); };
 
-            ss << Fmt(R"(        <a href="%s" target=_blank>%s</a> (%s, %.2f%%, pieces %d-%d))", f->stream_uri().c_str(),
-                      html_escape(f->path()).c_str(), humanize_bytes(f->size()).c_str(), pg, int(f->piece_start()), int(f->piece_end()))
+            ss << Fmt(R"(        <a href="%s" target=_blank>%s</a> (%s, %.2f%%, %s %d-%d))", f->stream_uri().c_str(),
+                      html_escape(f->path()).c_str(), humanize_bytes(f->size()).c_str(), pg, tr("label.pieces").c_str(),
+                      int(f->piece_start()), int(f->piece_end()))
                << "\n";
-            ss << Fmt("            Priority: %s, Readers: %d", pr > 0 ? std::to_string(pr).c_str() : "-", readers_count(i));
+            ss << "            " << tr("label.priority") << ": " << (pr > 0 ? std::to_string(pr) : "-") << ", " << tr("label.readers")
+               << ": " << readers_count(i);
             if (f->buffer_size() > 0)
-                ss << Fmt(", Buffer: %s (%.2f%%)", humanize_bytes(f->buffer_size()).c_str(), f->buffer_progress());
-            ss << ", Actions: ";
+                ss << ", " << tr("label.buffer") << Fmt(": %s (%.2f%%)", humanize_bytes(f->buffer_size()).c_str(), f->buffer_progress());
+            ss << ", " << tr("label.actions") << ": ";
             if (!is_memory)
-                ss << (pr > 0 ? file_action("stop", "Stop") : file_action("download", "Download")) << " | ";
-            ss << file_action("buffer", "Buffer");
+                ss << (pr > 0 ? file_action("stop", "action.stop") : file_action("download", "action.download")) << " | ";
+            ss << file_action("buffer", "action.buffer");
             if (!is_memory) {
-                ss << Fmt(
-                    R"html( | Priority: <select onchange="act('/torrents/%s/files/%d/set_priority?priority=' + this.value, '')">)html",
-                    hash().c_str(), i);
+                ss << " | " << tr("label.priority")
+                   << Fmt(R"html(: <select onchange="act('/torrents/%s/files/%d/set_priority?priority=' + this.value, '')">)html",
+                          hash().c_str(), i);
                 for (int p = int(lt::dont_download); p <= int(lt::top_priority); p++)
                     ss << Fmt("<option%s>%d</option>", p == pr ? " selected" : "", p);
                 ss << "</select>";
@@ -571,136 +701,42 @@ void Torrent::dump(std::stringstream &ss, bool is_files, bool is_trackers, bool 
         ss << "\n";
     }
 
-    auto tracker_infos = [this] {
-        std::scoped_lock guard(m_mutex);
-        return m_trackerInfos;
-    }();
-
     if (is_trackers) {
         auto tracker_line = [&ss](const std::string &url, const std::string &tier, const std::string &state, const std::string &seeds,
                                   const std::string &peers, const std::string &downloaded, const std::string &announce,
                                   const std::string &message) {
-            ss << Fmt("        %-60s %-4s %-16s %-6s %-6s %-10s %-9s %s\n", url.c_str(), tier.c_str(), state.c_str(), seeds.c_str(),
-                      peers.c_str(), downloaded.c_str(), announce.c_str(), message.c_str());
+            ss << "        " << pad_right(url, 61) << pad_right(tier, 5) << pad_right(state, 17) << pad_right(seeds, 7)
+               << pad_right(peers, 7) << pad_right(downloaded, 11) << pad_right(announce, 10) << message << "\n";
         };
 
-        ss << "    Trackers:\n";
-        tracker_line("URL", "Tier", "Status", "Seeds", "Peers", "Downloaded", "Announce", "Message");
-
-        auto const now = lt::clock_type::now();
-        // In tier order, as libtorrent announces to them
-        for (auto &tracker : with_handle([](const lt::torrent_handle &h) { return h.trackers(); })) {
-            int seeds = -1;
-            int peers = -1;
-            int downloaded = -1;
-            int fails = 0;
-            bool is_updating = false;
-            bool is_working = false;
-            std::int64_t next_announce = -1;
-            std::string message;
-
-            for (auto &endpoint : tracker.endpoints) {
-                seeds = std::max(seeds, endpoint.scrape_complete);
-                peers = std::max(peers, endpoint.scrape_incomplete);
-                downloaded = std::max(downloaded, endpoint.scrape_downloaded);
-                fails = std::max(fails, int(endpoint.fails));
-                is_updating = is_updating || endpoint.updating;
-                is_working = is_working || endpoint.is_working();
-                if (endpoint.enabled) {
-                    auto in = std::chrono::duration_cast<std::chrono::seconds>(endpoint.next_announce - now).count();
-                    if (in >= 0 && (next_announce < 0 || in < next_announce))
-                        next_announce = in;
-                }
-                if (endpoint.last_error)
-                    message = endpoint.last_error.message();
-                else if (!endpoint.message.empty() && message.empty())
-                    message = endpoint.message;
-            }
-
-            if (auto info = tracker_infos.find(tracker.url); info != tracker_infos.end()) {
-                if (peers == -1)
-                    peers = info->second.numPeers;
-                if (message.empty())
-                    message = info->second.lastMessage;
-            }
-
-            std::string state = is_updating  ? "Updating"
-                                : is_working ? "Working"
-                                : fails > 0  ? Fmt("Failed %d times", fails)
-                                             : "Not contacted";
-            tracker_line(html_escape(tracker.url), std::to_string(tracker.tier), state, peer_num_to_string(seeds),
-                         peer_num_to_string(peers), peer_num_to_string(downloaded),
-                         next_announce >= 0 ? Fmt("in %ds", int(next_announce)) : "-", html_escape(message));
+        ss << "    " << tr("section.trackers") << ":\n";
+        tracker_line(tr("label.url"), tr("label.tier"), tr("label.status"), tr("label.seeds"), tr("label.peers"), tr("label.downloaded"),
+                     tr("label.announce"), tr("label.message"));
+        for (const auto &t : trackers_status()) {
+            auto state = t.status == "failed" ? tr("tracker.failed", {std::to_string(t.fails)}) : tr(("tracker." + t.status).c_str());
+            tracker_line(html_escape(t.url), t.tier < 0 ? "-" : std::to_string(t.tier), state, peer_num_to_string(t.seeds),
+                         peer_num_to_string(t.peers), peer_num_to_string(t.downloaded),
+                         t.next_announce >= 0 ? tr("tracker.next_announce", {std::to_string(t.next_announce)}) : "-",
+                         html_escape(t.message));
         }
-
-        if (auto dht = tracker_infos.find("DHT"); dht != tracker_infos.end())
-            tracker_line("DHT", "-", status.announcing_to_dht ? "Working" : "Off", "-", peer_num_to_string(dht->second.numPeers), "-", "-",
-                         html_escape(dht->second.lastMessage));
         ss << "\n";
     }
 
     if (is_pieces) {
-        ss << "    Pieces (<b>*</b> stored and read by a stream, <b>?</b> wanted by a stream, + stored, ~ downloading, 1-7 queued with "
-              "that priority, - not wanted):\n";
-        ss << "        ";
-
-        std::vector<int> reader_positions;
-        {
-            std::scoped_lock guard(m_readersMutex);
-            for (const auto &[id, reader] : m_readers)
-                reader_positions.push_back(reader->piece_start());
+        auto pieces = pieces_status();
+        ss << "    " << tr("section.pieces") << " (" << tr("pieces.legend") << "):\n";
+        for (std::size_t i = 0; i < pieces.map.size(); i += 100) {
+            auto line = pieces.map.substr(i, 100);
+            // Pieces read by streams in bold
+            boost::replace_all(line, "*", "<b>*</b>");
+            boost::replace_all(line, "?", "<b>?</b>");
+            ss << "        " << line << "\n";
         }
-
-        // One call for all priorities and one for the pieces in download, stored pieces come from the snapshot
-        auto piece_priorities = with_handle([](const lt::torrent_handle &h) { return h.get_piece_priorities(); });
-        auto priority_of = [&](int i) { return std::size_t(i) < piece_priorities.size() ? int(piece_priorities[i]) : 0; };
-        auto queue = with_handle([](const lt::torrent_handle &h) {
-            std::vector<lt::partial_piece_info> pieces;
-            h.get_download_queue(pieces);
-            return pieces;
-        });
-        std::vector<bool> is_downloading(std::max(0, pieces_count()));
-        for (const auto &partial : queue) {
-            if (std::size_t(int(partial.piece_index)) < is_downloading.size())
-                is_downloading[int(partial.piece_index)] = true;
-        }
-
-        int total_prioritized = 0;
-        int total_have = 0;
-        int total_downloading = 0;
-        for (int i = 0; i < pieces_count(); i++) {
-            const bool have = snap->have_piece(i);
-            if (have)
-                total_have++;
-            if (!have && is_downloading[i])
-                total_downloading++;
-
-            if (std::find(reader_positions.begin(), reader_positions.end(), i) != reader_positions.end()) {
-                total_prioritized++;
-                ss << (have ? "<b>*</b>" : "<b>?</b>");
-            } else if (have) {
-                if (priority_of(i) > 0)
-                    total_prioritized++;
-                ss << "+";
-            } else if (is_downloading[i]) {
-                total_prioritized++;
-                ss << "~";
-            } else if (priority_of(i) == 0) {
-                ss << "-";
-            } else {
-                total_prioritized++;
-                ss << priority_of(i);
-            }
-
-            if (i > 0 && (i + 1) % 100 == 0) {
-                ss << "\n        ";
-            }
-        }
-        const int count = std::max(1, pieces_count());
-        ss << Fmt(
-            "\n        Total: <b>%d</b>, Stored: <b>%d</b> (%.2f%%), Downloading: <b>%d</b>, Prioritized: <b>%d</b>, Readers: <b>%d</b>",
-            pieces_count(), total_have, 100. * total_have / count, total_downloading, total_prioritized, int(reader_positions.size()));
-        ss << "\n";
+        const int count = std::max(1, pieces.total);
+        ss << "        "
+           << tr("pieces.summary", {std::to_string(pieces.total), std::to_string(pieces.stored), Fmt("%.2f", 100. * pieces.stored / count),
+                                    std::to_string(pieces.downloading), std::to_string(pieces.prioritized), std::to_string(pieces.readers)})
+           << "\n";
     }
     ss << "\n\n";
     ss << "    " << std::string(150, '*') << "\n";

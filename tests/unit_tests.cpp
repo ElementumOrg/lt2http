@@ -15,6 +15,7 @@
 #include <app/build_info.h>
 
 #include <app/config.h>
+#include <app/i18n.h>
 #include <bittorrent/natpmp.h>
 #include <bittorrent/torrent_state.h>
 #include <utils/numbers.h>
@@ -129,6 +130,51 @@ static void test_state() {
     CHECK(int(TorrentState::Finding) == 2);
     CHECK(int(TorrentState::Playing) == 10);
     CHECK(std::string(lh::state_to_string(TorrentState::Seeding)) == "Seeding");
+}
+
+static void test_i18n() {
+    CHECK(lh::languages().size() == 22);
+    CHECK(lh::languages().front().code == "de_de");
+    CHECK(lh::resolve_language("de") == "de_de");
+    CHECK(lh::resolve_language("DE-de") == "de_de");
+    CHECK(lh::resolve_language("es") == "es_es");
+    CHECK(lh::resolve_language("es-CO") == "es_es");
+    CHECK(lh::resolve_language("pt") == "pt_pt");
+    CHECK(lh::resolve_language("en") == "en_gb");
+    CHECK(lh::resolve_language("xx") == "en_gb");
+    CHECK(lh::resolve_language("", "ru_ru") == "ru_ru");
+
+    CHECK(lh::translate("en_gb", "state.Seeding") == "Seeding");
+    CHECK(lh::translate("de_de", "state.Seeding") == "Seeden");
+    CHECK(lh::translate("xx_xx", "state.Seeding") == "Seeding");
+    CHECK(lh::translate("de_de", "no.such_key") == "no.such_key");
+    CHECK(lh::translate("en_gb", "tracker.failed", {"3"}) == "Failures: 3");
+
+    CHECK(lh::find_web_file("index.html") != nullptr);
+    CHECK(lh::find_web_file("assets/index.js") != nullptr);
+    CHECK(lh::find_web_file("i18n/en_gb.json") != nullptr);
+    CHECK(lh::find_web_file("nope.html") == nullptr);
+
+    CHECK(pad_right("ab", 4) == "ab  ");
+    CHECK(pad_right("Größe", 6) == "Größe ");
+    CHECK(pad_right("abcdef", 3) == "abcdef ");
+}
+
+static void test_url_headers() {
+    auto [url, headers] = split_url_headers("https://host/a.torrent|Cookie=a=b; c=d|User-Agent=Kodi");
+    CHECK(url == "https://host/a.torrent");
+    CHECK(headers.size() == 2);
+    CHECK((headers[0] == std::pair<std::string, std::string>{"Cookie", "a=b; c=d"}));
+    CHECK((headers[1] == std::pair<std::string, std::string>{"User-Agent", "Kodi"}));
+    CHECK(split_url_headers("https://host/a.torrent").second.empty());
+
+    bool threw = false;
+    try {
+        split_url_headers("https://host/a.torrent|nope");
+    } catch (const std::invalid_argument &) {
+        threw = true;
+    }
+    CHECK(threw);
 }
 
 static void test_masked_config() {
@@ -252,6 +298,8 @@ int main() {
     test_numbers();
     test_strings();
     test_state();
+    test_i18n();
+    test_url_headers();
     test_masked_config();
     test_pieces();
     test_path();
