@@ -23,7 +23,8 @@ Requests from `127.0.0.1` never need authentication, others do when `web_login` 
 Web UI: `http://<host>:65225/web/` (`/` opens it). It is built into the binary, so it works without any other files: add torrents
 (magnet, link to a .torrent file, with request headers as `https://host/file.torrent|Cookie=a=b|User-Agent=Kodi`, or upload),
 choose the storage and the files to download, see torrents with their files, trackers and pieces, copy file links to play or
-download, remove torrents with or without their data, and see the settings (without passwords), libtorrent settings and state.
+download, remove torrents with or without their data, and see the settings (without passwords), libtorrent settings and state,
+links to open lt2http from other devices, and the listen sockets and NAT-PMP/UPnP port mappings.
 It is translated into the languages of Elementum, `web/public/i18n/` has the texts.
 
 The Web UI is TypeScript with React and Mantine in `web/src/`. It is built into `web/dist/`, which is in git and built into
@@ -41,7 +42,7 @@ Main API endpoints (see Swagger for all of them and their parameters):
 - `/torrents/{infoHash}/players/add`, `/players/remove` - register players, the torrent state is "Playing" while it has any. Players are removed after `player_timeout` seconds (default 60) without stream connections, like when Kodi crashes
 - `/torrents/{infoHash}/trackers`, `/torrents/{infoHash}/pieces` - trackers and pieces state
 - `/settings/get`, `/settings/set` - read and change settings at runtime
-- `/settings/state` - settings without passwords, libtorrent settings, session state and statistics
+- `/settings/state` - settings without passwords, libtorrent settings, session state and statistics, network state
 - `/languages` - translations of the Web UI, `/info` and of `state_localized` (the `lang` parameter of `/info` and the torrent
   endpoints, or the `language` setting, picks one, like `de` or `pt-br`; `state_string` stays the same in every language)
 - `/shutdown` - stop gracefully (exit code 0)

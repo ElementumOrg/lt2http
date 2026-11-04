@@ -59,7 +59,7 @@ class SettingsController : public oatpp::web::server::api::ApiController {
     }
 
     ENDPOINT_INFO(state) {
-        info->summary = "Get lt2http settings (without passwords), libtorrent settings and session state";
+        info->summary = "Get lt2http settings (without passwords), libtorrent settings, session and network state";
 
         info->addResponse<String>(Status::CODE_200, "application/json");
     }
@@ -103,10 +103,53 @@ class SettingsController : public oatpp::web::server::api::ApiController {
         state->push_back({"memory_size", oatpp::Any(oatpp::Int64(session.memory_size()))});
         state->push_back({"stats", oatpp::Any(stats)});
 
+        auto net = session.network_state();
+        auto list = [](const auto &items, auto to_fields) {
+            auto result = oatpp::List<oatpp::Any>::createShared();
+            for (const auto &item : items)
+                result->push_back(oatpp::Any(to_fields(item)));
+            return oatpp::Any(result);
+        };
+        auto fields = [](std::initializer_list<std::pair<const char *, oatpp::Any>> values) {
+            auto result = Fields::createShared();
+            for (const auto &[name, value] : values)
+                result->push_back({name, value});
+            return result;
+        };
+        auto string = [](const std::string &s) { return oatpp::Any(oatpp::String(s)); };
+        auto number = [](int n) { return oatpp::Any(oatpp::Int32(n)); };
+        auto network = fields({
+            {"web_addresses", list(net.web_addresses, [&](const std::string &a) { return oatpp::String(a); })},
+            {"web_port", number(net.web_port)},
+            {"listen_interfaces", string(net.listen_interfaces)},
+            {"listen_sockets",
+             list(net.sockets,
+                  [&](const lh::ListenSocket &s) {
+                      return fields(
+                          {{"address", string(s.address)}, {"port", number(s.port)}, {"type", string(s.type)}, {"error", string(s.error)}});
+                  })},
+            {"natpmp_enabled", oatpp::Any(oatpp::Boolean(net.natpmp_enabled))},
+            {"natpmp_mappings", list(net.nat_mappings,
+                                     [&](const lh::NatMapping &m) {
+                                         return fields({{"interface", string(m.entry)},
+                                                        {"local", string(m.local.to_string())},
+                                                        {"gateway", string(m.gateway.to_string())},
+                                                        {"port", number(m.port)}});
+                                     })},
+            {"port_mappings", list(net.port_mappings,
+                                   [&](const lh::PortMapping &m) {
+                                       return fields({{"transport", string(m.transport)},
+                                                      {"local_port", number(m.local_port)},
+                                                      {"message", string(m.message)},
+                                                      {"is_error", oatpp::Any(oatpp::Boolean(m.is_error))}});
+                                   })},
+        });
+
         auto result = Fields::createShared();
         result->push_back({"lt2http", getDefaultObjectMapper()->readFromString<oatpp::Any>(JS::serializeStruct(lh::config().masked()))});
         result->push_back({"libtorrent", oatpp::Any(libtorrent)});
         result->push_back({"session", oatpp::Any(state)});
+        result->push_back({"network", oatpp::Any(network)});
         return createDtoResponse(Status::CODE_200, result);
     }
 };

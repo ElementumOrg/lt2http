@@ -2,7 +2,7 @@
 
 ## 0.0.17 (2026-11-03)
 - Downloading uses about 40% less CPU: libtorrent ran 4 disk threads per CPU core (64 on a 16-core machine), and woke them all for every block written. It now runs 4.
-- Added a Web UI at `/web/` (`/` opens it), built into the binary: add torrents by magnet, link (with request headers after `|`) or upload, with a choice of storage and of the files to download, see and control torrents, files, trackers and pieces, copy file links, remove torrents with or without data and torrent information, see the settings, libtorrent settings and state.
+- Added a Web UI at `/web/` (`/` opens it), built into the binary: add torrents by magnet, link (with request headers after `|`) or upload, with a choice of storage and of the files to download, see and control torrents, files, trackers and pieces, copy file links, remove torrents with or without data and torrent information, see the settings, libtorrent settings and state, links to open lt2http from other devices, the listen sockets and the port mappings of NAT-PMP and UPnP.
 - lt2http is translated into the 22 languages of Elementum: `/info`, the Web UI and the new `state_localized` of torrent status, picked with the `lang` parameter or the `language` setting. `state_string` stays the same in every language.
 - Added `/torrents/{infoHash}/trackers`, `/torrents/{infoHash}/pieces`, `/settings/state` and `/languages`. Torrent status has `connections` and `connections_limit`, torrent info has `piece_length` and `download_path` (the folder of the files on disk), which the Web UI shows.
 - Adding a torrent by link or upload reports when the data is not a torrent.

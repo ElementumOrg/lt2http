@@ -94,10 +94,47 @@ export interface Pieces {
 
 export type Settings = Record<string, unknown>;
 
+export interface ListenSocket {
+  address: string;
+  port: number;
+  type: string;
+  // Empty when listening
+  error: string;
+}
+
+// lt2http's own NAT-PMP mapping
+export interface NatPmpMapping {
+  interface: string;
+  local: string;
+  gateway: string;
+  port: number;
+}
+
+// A mapping of libtorrent's UPnP or NAT-PMP
+export interface PortMapping {
+  transport: string;
+  // 0 when unknown
+  local_port: number;
+  message: string;
+  is_error: boolean;
+}
+
+export interface NetworkState {
+  // Addresses of this device for links from other devices
+  web_addresses: string[];
+  web_port: number;
+  listen_interfaces: string;
+  listen_sockets: ListenSocket[];
+  natpmp_enabled: boolean;
+  natpmp_mappings: NatPmpMapping[];
+  port_mappings: PortMapping[];
+}
+
 export interface SettingsState {
   lt2http: Settings;
   libtorrent: Settings;
   session: Settings & { stats: Record<string, number> };
+  network: NetworkState;
 }
 
 export interface Language {

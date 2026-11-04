@@ -12,8 +12,10 @@
 
 #include <libtorrent/alert_types.hpp>
 #include <libtorrent/bdecode.hpp>
+#include <libtorrent/enum_net.hpp>
 #include <libtorrent/ip_filter.hpp>
 #include <libtorrent/magnet_uri.hpp>
+#include <libtorrent/operations.hpp>
 #include <libtorrent/read_resume_data.hpp>
 #include <libtorrent/session.hpp>
 #include <libtorrent/session_stats.hpp>
@@ -315,7 +317,8 @@ void Session::configure() {
     // Set alert_mask here so it also applies on reconfigure...
     m_pack.set_int(lt::settings_pack::alert_mask, lt::alert::error_notification | lt::alert::file_progress_notification |
                                                       lt::alert::performance_warning | lt::alert::status_notification |
-                                                      lt::alert::tracker_notification | lt::alert_category::status);
+                                                      lt::alert::tracker_notification | lt::alert_category::status |
+                                                      lt::alert_category::port_mapping);
 
     if (m_config.use_libtorrent_logging) {
         m_pack.set_int(lt::settings_pack::alert_mask, lt::alert::all_categories);
@@ -400,6 +403,8 @@ std::vector<std::string> Session::listen_interfaces() const {
 std::string Session::listen_endpoints() {
     int const ports_per_interface = m_config.listen_port_max > m_config.listen_port_min ? 2 : 1;
     m_mapped_ports.clear();
+    // New sockets come with the listen alerts
+    m_listen_sockets.clear();
     std::vector<std::string> endpoints;
     for (const auto &i : listen_interfaces()) {
         bool const wildcard = i == "0.0.0.0" || i == "[::]";
@@ -467,6 +472,7 @@ void Session::add_port_mappings() {
 }
 
 void Session::delete_port_mappings() {
+    m_port_mappings.clear();
     for (const auto &[port, mappings] : m_mapped_ports) {
         OATPP_LOGI("Session::delete_port_mappings", "Deleting port mapping for port: %d", port);
         for (auto mapping : mappings)
@@ -640,6 +646,7 @@ void Session::handle_alert(const lt::alert *a) {
         break;
     case lt::listen_succeeded_alert::alert_type: {
         OATPP_LOGD("Session::consume_alerts", "Alert: %s, Message: %s", a->what(), a->message().c_str());
+        handle_network_alert(a);
         // libtorrent listens on another port when it cannot bind ours, the gateway does not forward that one
         int const port = static_cast<const lt::listen_succeeded_alert *>(a)->port;
         std::scoped_lock lock(m_portsMutex);
@@ -649,9 +656,81 @@ void Session::handle_alert(const lt::alert *a) {
         }
         break;
     }
+    case lt::listen_failed_alert::alert_type:
+    case lt::portmap_alert::alert_type:
+    case lt::portmap_error_alert::alert_type:
+        OATPP_LOGI("Session::consume_alerts", "Alert: %s, Message: %s", a->what(), a->message().c_str());
+        handle_network_alert(a);
+        break;
     default:
         OATPP_LOGD("Session::consume_alerts", "Alert: %s, Message: %s", a->what(), a->message().c_str());
     }
+}
+
+void Session::handle_network_alert(const lt::alert *a) {
+    static const char *const socket_types[] = {"tcp", "tcp_ssl", "udp", "i2p", "socks5", "utp_ssl"};
+    auto socket_type = [](lt::socket_type_t t) {
+        auto i = std::size_t(t);
+        return std::string(i < std::size(socket_types) ? socket_types[i] : "unknown");
+    };
+    auto transport = [](lt::portmap_transport t) { return std::string(t == lt::portmap_transport::upnp ? "UPnP" : "NAT-PMP"); };
+
+    std::scoped_lock lock(m_portsMutex);
+    // The local port of a mapping, from the mappings add_port_mappings() made
+    auto local_port = [this](lt::port_mapping_t mapping) {
+        for (const auto &[port, mappings] : m_mapped_ports) {
+            if (std::find(mappings.begin(), mappings.end(), mapping) != mappings.end())
+                return port;
+        }
+        return 0;
+    };
+
+    if (auto *p = lt::alert_cast<lt::listen_succeeded_alert>(a)) {
+        ListenSocket socket{p->address.to_string(), p->port, socket_type(p->socket_type), ""};
+        m_listen_sockets[socket.address + ":" + std::to_string(socket.port) + "/" + socket.type] = socket;
+    } else if (auto *p = lt::alert_cast<lt::listen_failed_alert>(a)) {
+        auto address = p->address.is_unspecified() ? std::string(p->listen_interface()) : p->address.to_string();
+        ListenSocket socket{address, p->port, socket_type(p->socket_type),
+                            std::string(lt::operation_name(p->op)) + ": " + p->error.message()};
+        m_listen_sockets[address + ":" + std::to_string(p->port) + "/" + socket.type] = socket;
+    } else if (auto *p = lt::alert_cast<lt::portmap_alert>(a)) {
+        m_port_mappings[transport(p->map_transport) + "/" + std::to_string(int(p->mapping))] =
+            PortMapping{transport(p->map_transport), local_port(p->mapping), p->message(), false};
+    } else if (auto *p = lt::alert_cast<lt::portmap_error_alert>(a)) {
+        m_port_mappings[transport(p->map_transport) + "/" + std::to_string(int(p->mapping))] =
+            PortMapping{transport(p->map_transport), local_port(p->mapping), p->message(), true};
+    }
+}
+
+NetworkState Session::network_state() {
+    NetworkState state;
+    {
+        std::scoped_lock lock(m_portsMutex);
+        state.listen_interfaces = m_pack.get_str(lt::settings_pack::listen_interfaces);
+        for (const auto &[key, socket] : m_listen_sockets)
+            state.sockets.push_back(socket);
+        state.natpmp_enabled = natpmp_enabled();
+        state.nat_mappings = m_nat_mappings;
+        for (const auto &[key, mapping] : m_port_mappings)
+            state.port_mappings.push_back(mapping);
+    }
+
+    // The web server listens on one address, or on all of them: then the IPv4 addresses of the network interfaces
+    state.web_port = lh::web_port;
+    if (!lh::web_interface.empty() && lh::web_interface != "0.0.0.0") {
+        state.web_addresses.push_back(lh::web_interface);
+    } else {
+        boost::asio::io_context ios;
+        lt::error_code ec;
+        for (const auto &iface : lt::enum_net_interfaces(ios, ec)) {
+            auto const &address = iface.interface_address;
+            if (!address.is_v4() || address.is_loopback() || !(iface.flags & lt::if_flags::up))
+                continue;
+            if (std::find(state.web_addresses.begin(), state.web_addresses.end(), address.to_string()) == state.web_addresses.end())
+                state.web_addresses.push_back(address.to_string());
+        }
+    }
+    return state;
 }
 
 void Session::prioritize() {

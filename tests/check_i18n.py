@@ -38,7 +38,7 @@ for path in sorted(glob.glob(os.path.join(i18n, '*.json'))):
             errors.append(f'{name}: {key} has placeholders {re.findall(r"{[0-9]+}", text)}, not {placeholders[key]}')
 
 # Keys in the code: 'group.key' strings in the Web UI (also the ones picked like t(x ? 'a.b' : 'a.c')), "group.key" in the server
-groups = 'nav|ui|state|storage|action|confirm|label|section|tracker|pieces|info|torrents|details|files|add|remove|settings'
+groups = 'nav|ui|state|storage|action|confirm|label|section|tracker|pieces|info|torrents|details|files|add|remove|settings|network'
 used = set()
 for path in glob.glob(os.path.join(root, 'web', 'src', '**', '*.ts*'), recursive=True):
     with open(path, encoding='utf-8') as f:

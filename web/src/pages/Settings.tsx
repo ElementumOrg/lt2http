@@ -2,6 +2,7 @@ import { Alert, Card, Code, SimpleGrid, Stack, Table, Text, TextInput, Title } f
 import { IconSearch } from '@tabler/icons-react';
 import { useState } from 'react';
 import { api, Settings } from '../api';
+import { NetworkCard } from '../components/NetworkCard';
 import { settingValue } from '../format';
 import { usePolling } from '../hooks';
 import { useI18n } from '../i18n';
@@ -49,6 +50,7 @@ export function SettingsPage() {
   return (
     <Stack>
       <Title order={3}>{t('nav.settings')}</Title>
+      <NetworkCard network={data.network} />
       <TextInput
         placeholder={t('settings.filter')}
         leftSection={<IconSearch size={16} />}

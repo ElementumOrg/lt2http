@@ -21,6 +21,40 @@
 
 namespace lh {
 
+// A listen socket of libtorrent, from its listen alerts
+struct ListenSocket {
+    std::string address;
+    int port = 0;
+    // tcp, tcp_ssl, udp, i2p, socks5 or utp_ssl
+    std::string type;
+    // Empty when listening
+    std::string error;
+};
+
+// A port mapping of libtorrent's UPnP or NAT-PMP, from its port mapping alerts
+struct PortMapping {
+    // UPnP or NAT-PMP
+    std::string transport;
+    // 0 when unknown
+    int local_port = 0;
+    std::string message;
+    bool is_error = false;
+};
+
+// For /settings/state
+struct NetworkState {
+    // Addresses of this device, for links to the web server from other devices
+    std::vector<std::string> web_addresses;
+    int web_port = 0;
+    // The listen_interfaces setting of libtorrent
+    std::string listen_interfaces;
+    std::vector<ListenSocket> sockets;
+    // lt2http's own NAT-PMP, see natpmp.h
+    bool natpmp_enabled = false;
+    std::vector<NatMapping> nat_mappings;
+    std::vector<PortMapping> port_mappings;
+};
+
 class Session {
   private:
     std::shared_ptr<lt::session> m_nativeSession = nullptr;
@@ -31,7 +65,10 @@ class Session {
     mutable std::mutex m_statsMutex;
     std::map<int, std::vector<lt::port_mapping_t>> m_mapped_ports;
     std::vector<NatMapping> m_nat_mappings;
-    // Guards m_pack, m_config and the port mappings, which the NAT-PMP thread changes too
+    // Results of the listen and port mapping alerts, by socket and by mapping
+    std::map<std::string, ListenSocket> m_listen_sockets;
+    std::map<std::string, PortMapping> m_port_mappings;
+    // Guards m_pack, m_config, the port mappings and listen sockets, which the NAT-PMP and alerts threads change too
     std::mutex m_portsMutex;
     std::atomic<bool> m_natpmp_rescan{false};
 
@@ -102,6 +139,7 @@ class Session {
     void handle_session_stats_alert(const lt::session_stats_alert *p);
     void dispatch_alert(const lt::alert *a);
     void handle_alert(const lt::alert *a);
+    void handle_network_alert(const lt::alert *a);
 
     static void remove_temporary_file(const std::string &path);
     void trigger_resume_data();
@@ -113,6 +151,7 @@ class Session {
     std::map<std::string, std::int64_t> session_stats() const;
     int listen_port() const;
     bool is_dht_running() const;
+    NetworkState network_state();
 
     bool is_paused() const;
     void pause();

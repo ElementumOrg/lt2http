@@ -74,6 +74,9 @@ check "languages" contains "$(get $U/languages)" '{"code":"uk_ua","name":"Укр
 STATE=$(get $U/settings/state)
 check "settings state" contains "$STATE" '"listen_port":'
 check "libtorrent settings" contains "$STATE" '"user_agent":'
+check "web links port" contains "$STATE" "\"web_port\":$SEEDER_PORT"
+check "listen socket" contains "$STATE" "{\"address\":\"127.0.0.1\",\"port\":$PEER_PORT,\"type\":\"tcp\",\"error\":\"\"}"
+check "nat-pmp off without upnp" contains "$STATE" '"natpmp_enabled":false'
 check "password hidden" contains "$STATE" '"proxy_password":"***"'
 check "password not in state" bash -c "! grep -q hidden1 <<< '$STATE'"
 check "password not logged" bash -c "! grep -q hidden1 '$WORK/seeder.log'"
