@@ -426,15 +426,15 @@ std::string Session::listen_endpoints() {
 void Session::reconfigure() {
     OATPP_LOGI("Session::reconfigure", "Reconfiguring libtorrent session");
     std::scoped_lock lock(m_portsMutex);
+    // configure() picks new listen ports and turns all services off, start_services() turns the enabled ones back on
+    delete_port_mappings();
     m_config = lh::config();
     configure();
-
-    // Apply settings
-    m_nativeSession->apply_settings(m_pack);
+    start_services();
 }
 
+// The caller holds m_portsMutex, or no other thread runs yet
 void Session::start_services() {
-    std::scoped_lock lock(m_portsMutex);
     if (!m_config.disable_lsd) {
         OATPP_LOGI("Session::start_services", "Starting LSD...");
         m_pack.set_bool(lt::settings_pack::enable_lsd, true);
@@ -525,7 +525,8 @@ void Session::natpmp() {
             port_max = m_config.listen_port_max;
         }
 
-        bool rescan = !enabled || mappings.empty() || interfaces != scanned;
+        // A rescan request is handled here, not right away, so a port that keeps failing cannot loop the search
+        bool rescan = m_natpmp_rescan.exchange(false) || !enabled || mappings.empty() || interfaces != scanned;
         for (const auto &m : mappings)
             if (!rescan && !natpmp_refresh(m, m_isClosing))
                 rescan = true;
@@ -640,6 +641,17 @@ void Session::handle_alert(const lt::alert *a) {
     case lt::metadata_received_alert::alert_type:
         handle_metadata_received_alert(static_cast<const lt::metadata_received_alert *>(a));
         break;
+    case lt::listen_succeeded_alert::alert_type: {
+        OATPP_LOGD("Session::consume_alerts", "Alert: %s, Message: %s", a->what(), a->message().c_str());
+        // libtorrent listens on another port when it cannot bind ours, the gateway does not forward that one
+        int const port = static_cast<const lt::listen_succeeded_alert *>(a)->port;
+        std::scoped_lock lock(m_portsMutex);
+        if (!m_nat_mappings.empty() && !m_mapped_ports.count(port)) {
+            OATPP_LOGI("Session::consume_alerts", "Listening on port %d, which is not NAT-PMP mapped, searching again", port);
+            m_natpmp_rescan = true;
+        }
+        break;
+    }
     default:
         OATPP_LOGD("Session::consume_alerts", "Alert: %s, Message: %s", a->what(), a->message().c_str());
     }

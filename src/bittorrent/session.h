@@ -31,6 +31,7 @@ class Session {
     std::vector<NatMapping> m_nat_mappings;
     // Guards m_pack, m_config and the port mappings, which the NAT-PMP thread changes too
     std::mutex m_portsMutex;
+    std::atomic<bool> m_natpmp_rescan{false};
 
     lh::Config m_config;
     std::vector<std::shared_ptr<Torrent>> m_torrents;
