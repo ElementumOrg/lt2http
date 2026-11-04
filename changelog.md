@@ -3,6 +3,7 @@
 ## 0.0.17 (2026-11-03)
 - Added lt2http as a shared library (`lt2http.so` / `lt2http.dll`), started with `startWithLogAndArgs()`.
 - Added linux-armv7_softfp and darwin-arm64 (Apple Silicon) builds.
+- NAT-PMP port forwarding works behind VPNs (like ProtonVPN): the gateways of the listen interfaces (all private addresses by default) are probed, libtorrent listens on the port the gateway maps, and the mapping is renewed while lt2http runs.
 - Requests from localhost are always allowed without authentication.
 - Torrent information and status come from a state kept up to date in the background, so requests are faster and `/info` no longer slows down on torrents with many pieces.
 - The name of a magnet link is shown before its metadata is downloaded.

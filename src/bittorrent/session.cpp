@@ -1,5 +1,6 @@
 #include "session.h"
 
+#include <algorithm>
 #include <boost/filesystem/operations.hpp>
 #include <chrono>
 #include <mutex>
@@ -90,6 +91,7 @@ Session::Session(lh::Config &config) : m_config(config) {
 
     start_thread("Session::consume_alerts", [this] { consume_alerts(); });
     start_thread("Session::prioritize", [this] { prioritize(); });
+    start_thread("Session::natpmp", [this] { natpmp(); });
 }
 
 Session::~Session() {
@@ -383,33 +385,47 @@ void Session::configure() {
         m_config.listen_port_max = 6899;
     }
 
-    std::vector<std::string> listen_interfaces{"0.0.0.0", "[::]"};
-    if (!m_config.listen_auto_detect_ip && !m_config.listen_interfaces.empty())
-        listen_interfaces = m_config.listen_interfaces;
-
-    // Two random ports per interface, if the range allows it.
-    int const ports_per_interface = m_config.listen_port_max > m_config.listen_port_min ? 2 : 1;
-    m_mapped_ports.clear();
-    std::vector<std::string> listen_endpoints;
-    for (const auto &i : listen_interfaces) {
-        for (int n = 0; n < ports_per_interface; n++) {
-            int port = random(m_config.listen_port_min, m_config.listen_port_max);
-            m_mapped_ports[port] = {};
-            listen_endpoints.push_back(i + ":" + std::to_string(port));
-        }
-    }
-
-    auto listen_interfaces_result = join(listen_endpoints, ",");
-    m_pack.set_str(lt::settings_pack::listen_interfaces, listen_interfaces_result);
-    OATPP_LOGI("Session::configure", "Listening on: %s", listen_interfaces_result.c_str());
+    auto const endpoints = listen_endpoints();
+    m_pack.set_str(lt::settings_pack::listen_interfaces, endpoints);
+    OATPP_LOGI("Session::configure", "Listening on: %s", endpoints.c_str());
 
     if (!m_config.outgoing_interfaces.empty()) {
         m_pack.set_str(lt::settings_pack::outgoing_interfaces, join(m_config.outgoing_interfaces, ","));
     }
 }
 
+std::vector<std::string> Session::listen_interfaces() const {
+    if (!m_config.listen_auto_detect_ip && !m_config.listen_interfaces.empty())
+        return m_config.listen_interfaces;
+    return {"0.0.0.0", "[::]"};
+}
+
+// Listens on the NAT-PMP mapped ports where there are any, otherwise on two random ports per interface if the range allows it.
+std::string Session::listen_endpoints() {
+    int const ports_per_interface = m_config.listen_port_max > m_config.listen_port_min ? 2 : 1;
+    m_mapped_ports.clear();
+    std::vector<std::string> endpoints;
+    for (const auto &i : listen_interfaces()) {
+        bool const wildcard = i == "0.0.0.0" || i == "[::]";
+        std::vector<int> ports;
+        for (const auto &m : m_nat_mappings)
+            if ((wildcard || m.entry == i) && std::find(ports.begin(), ports.end(), m.port) == ports.end())
+                ports.push_back(m.port);
+        if (ports.empty())
+            for (int n = 0; n < ports_per_interface; n++)
+                ports.push_back(random(m_config.listen_port_min, m_config.listen_port_max));
+
+        for (int port : ports) {
+            m_mapped_ports[port] = {};
+            endpoints.push_back(i + ":" + std::to_string(port));
+        }
+    }
+    return join(endpoints, ",");
+}
+
 void Session::reconfigure() {
     OATPP_LOGI("Session::reconfigure", "Reconfiguring libtorrent session");
+    std::scoped_lock lock(m_portsMutex);
     m_config = lh::config();
     configure();
 
@@ -418,6 +434,7 @@ void Session::reconfigure() {
 }
 
 void Session::start_services() {
+    std::scoped_lock lock(m_portsMutex);
     if (!m_config.disable_lsd) {
         OATPP_LOGI("Session::start_services", "Starting LSD...");
         m_pack.set_bool(lt::settings_pack::enable_lsd, true);
@@ -435,19 +452,34 @@ void Session::start_services() {
         OATPP_LOGI("Session::start_services", "Starting UPNP...");
         m_pack.set_bool(lt::settings_pack::enable_upnp, true);
 
-        OATPP_LOGI("Session::start_services", "Starting NATPMP...");
-        m_pack.set_bool(lt::settings_pack::enable_natpmp, true);
+        // Otherwise our own NAT-PMP thread owns the mappings: libtorrent only asks the default gateway
+        if (!natpmp_enabled()) {
+            OATPP_LOGI("Session::start_services", "Starting NATPMP...");
+            m_pack.set_bool(lt::settings_pack::enable_natpmp, true);
+        }
     }
 
     m_nativeSession->apply_settings(m_pack);
+    add_port_mappings();
+}
 
+void Session::add_port_mappings() {
     for (auto &[port, mappings] : m_mapped_ports) {
-        OATPP_LOGI("Session::start_services", "Adding port mapping: %d", port);
+        OATPP_LOGI("Session::add_port_mappings", "Adding port mapping: %d", port);
         mappings = m_nativeSession->add_port_mapping(lt::session::tcp, port, port);
     }
 }
 
+void Session::delete_port_mappings() {
+    for (const auto &[port, mappings] : m_mapped_ports) {
+        OATPP_LOGI("Session::delete_port_mappings", "Deleting port mapping for port: %d", port);
+        for (auto mapping : mappings)
+            m_nativeSession->delete_port_mapping(mapping);
+    }
+}
+
 void Session::stop_services() {
+    std::scoped_lock lock(m_portsMutex);
     if (!m_config.disable_lsd) {
         OATPP_LOGI("Session::stop_services", "Stopping LSD...");
         m_pack.set_bool(lt::settings_pack::enable_lsd, false);
@@ -466,14 +498,81 @@ void Session::stop_services() {
         m_pack.set_bool(lt::settings_pack::enable_natpmp, false);
     }
 
-    for (const auto &[port, mappings] : m_mapped_ports) {
-        OATPP_LOGI("Session::stop_services", "Deleting port mapping for port: %d", port);
-        for (auto mapping : mappings)
-            m_nativeSession->delete_port_mapping(mapping);
-    }
+    delete_port_mappings();
     m_mapped_ports.clear();
 
     m_nativeSession->apply_settings(m_pack);
+}
+
+bool Session::natpmp_enabled() const { return !m_config.disable_upnp && m_config.listen_auto_detect_port; }
+
+// Like Elementum: the gateway that does NAT-PMP (usually a VPN one) is searched for, libtorrent listens on the port it maps,
+// and the mapping is renewed while lt2http runs. A failed renewal or changed listen interfaces start a new search.
+void Session::natpmp() {
+    std::vector<std::string> scanned;
+    std::chrono::seconds delay{0};
+    while (!wait_for_abort(delay)) {
+        std::vector<std::string> interfaces;
+        std::vector<NatMapping> mappings;
+        bool enabled;
+        int port_min, port_max;
+        {
+            std::scoped_lock lock(m_portsMutex);
+            interfaces = listen_interfaces();
+            mappings = m_nat_mappings;
+            enabled = natpmp_enabled();
+            port_min = m_config.listen_port_min;
+            port_max = m_config.listen_port_max;
+        }
+
+        bool rescan = !enabled || mappings.empty() || interfaces != scanned;
+        for (const auto &m : mappings)
+            if (!rescan && !natpmp_refresh(m, m_isClosing))
+                rescan = true;
+
+        if (rescan) {
+            for (const auto &m : mappings)
+                natpmp_delete(m);
+            auto found = enabled ? natpmp_map(interfaces, port_min, port_max, m_isClosing) : std::vector<NatMapping>{};
+            scanned = interfaces;
+            if (!found.empty() || !mappings.empty())
+                apply_nat_mappings(found);
+            mappings = found;
+        }
+
+        // Mappings live for 60 seconds, and a VPN may come up later
+        delay = std::chrono::seconds(mappings.empty() ? 300 : 45);
+    }
+
+    std::vector<NatMapping> mappings;
+    {
+        std::scoped_lock lock(m_portsMutex);
+        mappings.swap(m_nat_mappings);
+    }
+    for (const auto &m : mappings)
+        natpmp_delete(m);
+}
+
+void Session::apply_nat_mappings(std::vector<NatMapping> mappings) {
+    std::scoped_lock lock(m_portsMutex);
+    m_nat_mappings = std::move(mappings);
+    // stop_services() already removed the libtorrent mappings
+    if (is_closing())
+        return;
+
+    bool const upnp = !m_config.disable_upnp;
+    if (upnp)
+        delete_port_mappings();
+
+    auto const endpoints = listen_endpoints();
+    m_pack.set_str(lt::settings_pack::listen_interfaces, endpoints);
+    lt::settings_pack pack;
+    pack.set_str(lt::settings_pack::listen_interfaces, endpoints);
+    m_nativeSession->apply_settings(pack);
+    OATPP_LOGI("Session::natpmp", "Listening on: %s", endpoints.c_str());
+
+    if (upnp)
+        add_port_mappings();
 }
 
 void Session::consume_alerts() {

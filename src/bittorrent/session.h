@@ -16,6 +16,7 @@
 #include <app/config.h>
 
 #include <bittorrent/memory_storage.h>
+#include <bittorrent/natpmp.h>
 #include <bittorrent/torrent.h>
 
 namespace lh {
@@ -27,6 +28,9 @@ class Session {
 
     std::map<std::string, std::int64_t> m_session_stats;
     std::map<int, std::vector<lt::port_mapping_t>> m_mapped_ports;
+    std::vector<NatMapping> m_nat_mappings;
+    // Guards m_pack, m_config and the port mappings, which the NAT-PMP thread changes too
+    std::mutex m_portsMutex;
 
     lh::Config m_config;
     std::vector<std::shared_ptr<Torrent>> m_torrents;
@@ -47,6 +51,14 @@ class Session {
     // Waits for the timeout, returns true if the session is closing.
     bool wait_for_abort(std::chrono::milliseconds timeout);
     void start_thread(const char *name, std::function<void()> fn);
+
+    std::vector<std::string> listen_interfaces() const;
+    std::string listen_endpoints();
+    bool natpmp_enabled() const;
+    void natpmp();
+    void apply_nat_mappings(std::vector<NatMapping> mappings);
+    void add_port_mappings();
+    void delete_port_mappings();
 
   public:
     explicit Session(lh::Config &config);

@@ -37,6 +37,7 @@ set(lt2http_sources
         src/app/config.cpp
         src/bittorrent/file.cpp
         src/bittorrent/memory_storage.cpp
+        src/bittorrent/natpmp.cpp
         src/bittorrent/reader.cpp
         src/bittorrent/session.cpp
         src/bittorrent/torrent.cpp
@@ -165,7 +166,7 @@ endif ()
 
 if (build_tests)
     enable_testing()
-    add_executable(lt2http_tests tests/unit_tests.cpp "${build_info_source}")
+    add_executable(lt2http_tests tests/unit_tests.cpp src/bittorrent/natpmp.cpp "${build_info_source}")
     target_include_directories(lt2http_tests PRIVATE src src/external/json_struct/include)
     target_compile_definitions(lt2http_tests PRIVATE LT2HTTP_CHANGELOG_FILE="${CMAKE_CURRENT_SOURCE_DIR}/changelog.md")
     target_link_libraries(lt2http_tests PRIVATE oatpp::oatpp LibtorrentRasterbar::torrent-rasterbar Boost::filesystem)

@@ -5,11 +5,17 @@
 #include <string>
 #include <vector>
 
+#include <array>
+#include <thread>
+
+#include <boost/asio/io_context.hpp>
+#include <boost/asio/ip/udp.hpp>
 #include <boost/filesystem.hpp>
 
 #include <app/build_info.h>
 
 #include <app/config.h>
+#include <bittorrent/natpmp.h>
 #include <utils/numbers.h>
 #include <utils/path.h>
 #include <utils/pieces.h>
@@ -137,6 +143,56 @@ static void test_params() {
     CHECK(thrown);
 }
 
+static void test_natpmp() {
+    using boost::asio::ip::address_v4;
+    using boost::asio::ip::udp;
+    auto ip = [](const char *s) { return boost::asio::ip::make_address_v4(s); };
+
+    // ProtonVPN-like /32 address without a route gateway
+    CHECK(lh::natpmp_gateway_guesses(ip("10.2.0.2"), {}) == (std::vector<address_v4>{ip("10.2.0.1"), ip("10.0.0.1")}));
+    CHECK(lh::natpmp_gateway_guesses(ip("192.168.1.5"), ip("192.168.1.1")) ==
+          (std::vector<address_v4>{ip("192.168.1.1"), ip("192.168.0.1"), ip("192.0.0.1")}));
+    CHECK(lh::natpmp_gateway_guesses(ip("10.0.0.1"), {}).empty());
+
+    // A fake gateway on localhost: keeping the port renews the mapping, moving it fails and deletes the unusable mapping
+    for (int external : {6891, 7000}) {
+        boost::asio::io_context ioc;
+        udp::socket server(ioc, udp::endpoint(address_v4::loopback(), 5351));
+        std::thread gateway([&] {
+            int const requests = external == 6891 ? 2 : 4; // TCP and UDP, then their deletion
+            for (int i = 0; i < requests; i++) {
+                std::array<unsigned char, 12> req{};
+                udp::endpoint from;
+                server.receive_from(boost::asio::buffer(req), from);
+                std::array<unsigned char, 16> res{0,
+                                                  static_cast<unsigned char>(128 + req[1]),
+                                                  0,
+                                                  0,
+                                                  0,
+                                                  0,
+                                                  0,
+                                                  0,
+                                                  req[4],
+                                                  req[5],
+                                                  static_cast<unsigned char>(external >> 8),
+                                                  static_cast<unsigned char>(external),
+                                                  req[8],
+                                                  req[9],
+                                                  req[10],
+                                                  req[11]};
+                server.send_to(boost::asio::buffer(res), from);
+            }
+        });
+
+        lh::NatMapping m;
+        m.local = m.gateway = address_v4::loopback();
+        m.port = 6891;
+        std::atomic<bool> const abort{false};
+        CHECK(lh::natpmp_refresh(m, abort) == (external == 6891));
+        gateway.join();
+    }
+}
+
 int main() {
     test_changelog();
     test_numbers();
@@ -144,6 +200,7 @@ int main() {
     test_pieces();
     test_path();
     test_params();
+    test_natpmp();
 
     if (failures)
         std::fprintf(stderr, "%d checks failed\n", failures);
