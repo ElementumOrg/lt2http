@@ -39,6 +39,10 @@ Torrent::Torrent(std::shared_ptr<lt::session> nativeSession, const lt::torrent_h
     m_torrentFile = torrent_file(config.torrents_path, m_hash);
     m_resumeFile = resume_file(config.torrents_path, m_hash);
     m_partsFile = parts_file(config.download_path, m_hash);
+    m_metaFile = meta_file(config.torrents_path, m_hash);
+
+    if (file_exists(m_metaFile) && !load_file(m_metaFile, m_metaInfo))
+        OATPP_LOGE("Torrent", "Could not read meta info from: %s", m_metaFile.c_str());
 
     // Later updates come from the alerts thread, see Session::handle_state_update_alert()
     set_snapshot(m_nativeHandle.status(), m_nativeHandle.torrent_file());
@@ -61,7 +65,6 @@ void Torrent::set_snapshot(const lt::torrent_status &status, std::shared_ptr<con
     auto snapshot = std::make_shared<TorrentSnapshot>();
     snapshot->status = status;
     snapshot->info = std::move(info);
-    snapshot->state = compute_state(snapshot->status, snapshot->has_metadata());
 
     std::scoped_lock guard(m_snapshotMutex);
     m_snapshot = std::move(snapshot);
@@ -196,6 +199,7 @@ void Torrent::remove(bool is_delete_files, bool is_delete_data) {
     if (is_delete_files || is_memory_storage()) {
         remove(m_resumeFile);
         remove(m_partsFile);
+        remove(m_metaFile);
     }
 
     OATPP_LOGI("Torrent::remove", "Removed torrent with hash: %s", hash().c_str());
@@ -203,85 +207,13 @@ void Torrent::remove(bool is_delete_files, bool is_delete_data) {
 
 bool Torrent::is_memory_storage() const { return m_storageType == storage_type_t::memory; }
 
-TorrentState Torrent::state() const { return snapshot()->state; }
-
-std::string Torrent::state_string() const {
-    switch (state()) {
-    case TorrentState::Unknown:
-        return "Unknown";
-    case TorrentState::Queued:
-        return "Queued";
-    case TorrentState::ForcedDownloading:
-        return "Forced downloading";
-    case TorrentState::Downloading:
-        return "Downloading";
-    case TorrentState::DownloadingMetadata:
-        return "Downloading metadata";
-    case TorrentState::StalledDownloading:
-        return "Stalled downloading";
-    case TorrentState::ForcedUploading:
-        return "Forced uploading";
-    case TorrentState::Uploading:
-        return "Uploading";
-    case TorrentState::StalledUploading:
-        return "Stalled uploading";
-    case TorrentState::CheckingResumeData:
-        return "Checking resume data";
-    case TorrentState::QueuedDownloading:
-        return "Queued downloading";
-    case TorrentState::QueuedUploading:
-        return "Queued uploading";
-    case TorrentState::CheckingUploading:
-        return "Checking uploading";
-    case TorrentState::CheckingDownloading:
-        return "Checking downloading";
-    case TorrentState::PausedDownloading:
-        return "Paused downloading";
-    case TorrentState::PausedUploading:
-        return "Paused uploading";
-    case TorrentState::Moving:
-        return "Moving";
-    case TorrentState::MissingFiles:
-        return "Missing files";
-    case TorrentState::Error:
-        return "Error";
-    default:
-        return "Unknown";
-    }
+// Not kept in the snapshot: buffering, players and pause change between status updates
+TorrentState Torrent::state() const {
+    auto s = snapshot();
+    return compute_state(s->status, s->has_metadata(), is_paused(), is_buffering(), players());
 }
 
-TorrentState Torrent::compute_state(const lt::torrent_status &status, bool has_metadata) const {
-    const bool paused = is_paused();
-    const bool auto_managed = static_cast<bool>(status.flags & lt::torrent_flags::auto_managed);
-    const bool native_paused = static_cast<bool>(status.flags & lt::torrent_flags::paused);
-
-    if (status.state == lt::torrent_status::checking_resume_data)
-        return TorrentState::CheckingResumeData;
-    if (status.errc)
-        return TorrentState::Error;
-    if (!has_metadata) {
-        if (paused)
-            return TorrentState::PausedDownloading;
-        // Queued: not paused by us, but paused by libtorrent's queue
-        if (auto_managed && native_paused)
-            return TorrentState::QueuedDownloading;
-        return TorrentState::DownloadingMetadata;
-    }
-    // Being checked, not just in the "checking" state
-    if (status.state == lt::torrent_status::checking_files && (!paused || auto_managed || !native_paused))
-        return TorrentState::CheckingDownloading;
-    if (status.total_wanted == 0)
-        return TorrentState::Queued;
-    if (status.state == lt::torrent_status::finished || status.state == lt::torrent_status::seeding) {
-        if (paused)
-            return TorrentState::PausedUploading;
-        // Forced: not paused, as the queueing system is not used
-        return TorrentState::ForcedUploading;
-    }
-    if (paused)
-        return TorrentState::PausedDownloading;
-    return TorrentState::ForcedDownloading;
-}
+std::string Torrent::state_string() const { return state_to_string(state()); }
 
 bool Torrent::is_buffering() const {
     auto all = files();
@@ -397,6 +329,23 @@ void Torrent::file_priority(lt::file_index_t index, lt::download_priority_t prio
     OATPP_LOGI("Torrent::file_priority", "Setting priority '%d' for file '%d'", int(priority), int(index));
     with_handle([&](const lt::torrent_handle &h) { h.file_priority(index, priority); });
     save_resume_data();
+}
+
+void Torrent::files_priority(lt::download_priority_t priority) {
+    if (is_memory_storage())
+        return;
+
+    OATPP_LOGI("Torrent::files_priority", "Setting priority '%d' for all files", int(priority));
+    with_handle([&](const lt::torrent_handle &h) {
+        if (auto info = h.torrent_file())
+            h.prioritize_files(std::vector<lt::download_priority_t>(std::size_t(info->num_files()), priority));
+    });
+    save_resume_data();
+}
+
+int Torrent::files_chosen() const {
+    auto priorities = with_handle([](const lt::torrent_handle &h) { return h.get_file_priorities(); });
+    return int(std::count_if(priorities.begin(), priorities.end(), [](lt::download_priority_t p) { return p > lt::dont_download; }));
 }
 
 lt::download_priority_t Torrent::piece_priority(lt::piece_index_t index) const {
@@ -521,17 +470,35 @@ void Torrent::update_tracker(const std::string &name, std::string message, int n
     info.numPeers = std::max(number, info.numPeers);
 }
 
-void Torrent::dump(std::stringstream &ss) {
+void Torrent::dump(std::stringstream &ss, bool is_files, bool is_trackers, bool is_pieces) {
     auto yes_no = [](bool value) { return value ? "true" : "false"; };
     auto snap = snapshot();
     auto const &status = snap->status;
+    const bool is_memory = is_memory_storage();
 
-    ss << Fmt("    Name:               %s \n", name().c_str());
+    // Links that run an API call from the page, act() is the script of /info
+    auto action = [this](const std::string &path, const char *title, const char *confirm = "") {
+        return Fmt(R"html(<a href="/torrents/%s%s" onclick="return act(this.href, '%s')">%s</a>)html", hash().c_str(), path.c_str(),
+                   confirm, title);
+    };
+
+    ss << Fmt("    Name:               <b>%s</b> \n", html_escape(name()).c_str());
     ss << Fmt("    Storage:            %s \n", storage_to_string(m_storageType));
     ss << Fmt("    Infohash:           %s \n", hash().c_str());
     ss << Fmt("    Status:             %s \n", state_string().c_str());
     ss << Fmt("    Pieces count:       %d \n", pieces_count());
     ss << Fmt("    Piece length:       %s \n", humanize_bytes(piece_length()).c_str());
+    ss << Fmt("    Players:            %d \n", players());
+    ss << Fmt("    Readers:            %d \n", readers_count());
+    ss << "    Actions:            " << (is_paused() ? action("/resume", "Resume") : action("/pause", "Pause"));
+    if (!is_memory)
+        ss << " | " << action("/files/download", "Download all") << " | " << action("/files/stop", "Stop all");
+    ss << " | " << action("/remove", "Remove", "Remove this torrent?");
+    if (!is_memory)
+        ss << " | " << action("/remove?deleteData=true", "Remove with data", "Remove this torrent and its downloaded files?");
+    ss << Fmt(R"( | <a href="/info?torrent=%s">Only this torrent</a>)", hash().c_str()) << "\n";
+    if (auto meta = meta_info(); !meta.empty())
+        ss << "    <details><summary>Metadata</summary>" << html_escape(meta) << "</details>\n";
     ss << "\n";
     ss << "    Speed:\n";
     ss << Fmt("        Download:   %s/s \n", humanize_bytes(status.download_payload_rate).c_str());
@@ -566,115 +533,171 @@ void Torrent::dump(std::stringstream &ss) {
     ss << Fmt("        announcing_to_dht: %s \n", yes_no(status.announcing_to_dht));
     ss << "\n";
 
-    ss << "    Files (Priority):\n";
-    auto file_priorities = with_handle([](const lt::torrent_handle &h) { return h.get_file_priorities(); });
-    for (auto &f : files()) {
-        auto pr = std::size_t(f->index()) < file_priorities.size() ? file_priorities[f->index()] : lt::dont_download;
-        if (pr > 0) {
-            ss << Fmt("        <a href=\"%s\" target=_blank>%s</a> (%s): %d \n", f->stream_uri().c_str(), f->path().c_str(),
-                      humanize_bytes(f->size()).c_str(), int(pr));
-        } else {
-            ss << Fmt("        <a href=\"%s\" target=_blank>%s</a> (%s): - \n", f->stream_uri().c_str(), f->path().c_str(),
-                      humanize_bytes(f->size()).c_str());
-        }
-    }
+    if (is_files) {
+        ss << "    Files:\n";
+        auto file_priorities = with_handle([](const lt::torrent_handle &h) { return h.get_file_priorities(); });
+        auto progress = files_progress();
+        for (auto &f : files()) {
+            const int i = int(f->index());
+            const int pr = std::size_t(i) < file_priorities.size() ? int(file_priorities[i]) : 0;
+            const double pg = std::size_t(i) < progress.size() ? progress[i] * 100 : 0;
+            auto file_action = [&](const char *path, const char *title) { return action(Fmt("/files/%d/%s", i, path), title); };
 
-    ss << "\n";
-    ss << "    Trackers:\n";
+            ss << Fmt(R"(        <a href="%s" target=_blank>%s</a> (%s, %.2f%%, pieces %d-%d))", f->stream_uri().c_str(),
+                      html_escape(f->path()).c_str(), humanize_bytes(f->size()).c_str(), pg, int(f->piece_start()), int(f->piece_end()))
+               << "\n";
+            ss << Fmt("            Priority: %s, Readers: %d", pr > 0 ? std::to_string(pr).c_str() : "-", readers_count(i));
+            if (f->buffer_size() > 0)
+                ss << Fmt(", Buffer: %s (%.2f%%)", humanize_bytes(f->buffer_size()).c_str(), f->buffer_progress());
+            ss << ", Actions: ";
+            if (!is_memory)
+                ss << (pr > 0 ? file_action("stop", "Stop") : file_action("download", "Download")) << " | ";
+            ss << file_action("buffer", "Buffer");
+            if (!is_memory) {
+                ss << Fmt(
+                    R"html( | Priority: <select onchange="act('/torrents/%s/files/%d/set_priority?priority=' + this.value, '')">)html",
+                    hash().c_str(), i);
+                for (int p = int(lt::dont_download); p <= int(lt::top_priority); p++)
+                    ss << Fmt("<option%s>%d</option>", p == pr ? " selected" : "", p);
+                ss << "</select>";
+            }
+            ss << "\n";
+        }
+        ss << "\n";
+    }
 
     auto tracker_infos = [this] {
         std::scoped_lock guard(m_mutex);
         return m_trackerInfos;
     }();
 
-    std::map<std::string, std::string> trackers;
-    for (auto &tracker : with_handle([](const lt::torrent_handle &h) { return h.trackers(); })) {
-        int scrape_complete = -1;
-        int scrape_incomplete = -1;
-        std::string message;
+    if (is_trackers) {
+        auto tracker_line = [&ss](const std::string &url, const std::string &tier, const std::string &state, const std::string &seeds,
+                                  const std::string &peers, const std::string &downloaded, const std::string &announce,
+                                  const std::string &message) {
+            ss << Fmt("        %-60s %-4s %-16s %-6s %-6s %-10s %-9s %s\n", url.c_str(), tier.c_str(), state.c_str(), seeds.c_str(),
+                      peers.c_str(), downloaded.c_str(), announce.c_str(), message.c_str());
+        };
 
-        const bool is_updating = std::any_of(tracker.endpoints.begin(), tracker.endpoints.end(),
-                                             [](const lt::announce_endpoint &endpoint) { return endpoint.updating; });
+        ss << "    Trackers:\n";
+        tracker_line("URL", "Tier", "Status", "Seeds", "Peers", "Downloaded", "Announce", "Message");
 
-        const bool is_working = std::any_of(tracker.endpoints.begin(), tracker.endpoints.end(),
-                                            [](const lt::announce_endpoint &endpoint) { return endpoint.is_working(); });
+        auto const now = lt::clock_type::now();
+        // In tier order, as libtorrent announces to them
+        for (auto &tracker : with_handle([](const lt::torrent_handle &h) { return h.trackers(); })) {
+            int seeds = -1;
+            int peers = -1;
+            int downloaded = -1;
+            int fails = 0;
+            bool is_updating = false;
+            bool is_working = false;
+            std::int64_t next_announce = -1;
+            std::string message;
 
-        for (auto &endpoint : tracker.endpoints) {
-            scrape_complete = std::max(scrape_complete, endpoint.scrape_complete);
-            scrape_incomplete = std::max(scrape_incomplete, endpoint.scrape_incomplete);
-            if (!endpoint.message.empty())
-                message = endpoint.message;
-        }
-
-        if (auto info = tracker_infos.find(tracker.url); scrape_incomplete == -1 && info != tracker_infos.end())
-            scrape_incomplete = info->second.numPeers;
-
-        trackers.emplace(tracker.url,
-                         Fmt("        %-60s: %-3s seeds, %-3s peers, updating: %-5s, is_working: %-5s, message: %s\n", tracker.url.c_str(),
-                             peer_num_to_string(scrape_complete).c_str(), peer_num_to_string(scrape_incomplete).c_str(),
-                             yes_no(is_updating), yes_no(is_working), message.c_str()));
-    }
-
-    // List trackers information sorted by tracker url.
-    for (const auto &[url, line] : trackers)
-        ss << line;
-
-    if (auto dht = tracker_infos.find("DHT"); dht != tracker_infos.end()) {
-        auto const &entry = dht->second;
-        ss << Fmt("        %-60s: %-3s seeds, %-3s peers, updating: %-5s, is_working: %-5s, message: %s\n", "DHT", "-",
-                  peer_num_to_string(entry.numPeers).c_str(), "false", "true", entry.lastMessage.c_str());
-    }
-    ss << "\n";
-
-    ss << "    Pieces:\n";
-    ss << "        ";
-
-    std::vector<int> reader_positions;
-    {
-        std::scoped_lock guard(m_readersMutex);
-        for (const auto &[id, reader] : m_readers)
-            reader_positions.push_back(reader->piece_start());
-    }
-
-    // One call for all priorities, pieces come from the snapshot
-    auto piece_priorities = with_handle([](const lt::torrent_handle &h) { return h.get_piece_priorities(); });
-    auto priority_of = [&](int i) { return std::size_t(i) < piece_priorities.size() ? int(piece_priorities[i]) : 0; };
-
-    int total_prioritized = 0;
-    int total_have = 0;
-    for (int i = 0; i < pieces_count(); i++) {
-        if (std::find(reader_positions.begin(), reader_positions.end(), i) != reader_positions.end()) {
-            total_prioritized++;
-            // Piece is in scope of Readers
-            if (snap->have_piece(i)) {
-                total_have++;
-                ss << "<b>*</b>";
-            } else {
-                ss << "<b>?</b>";
+            for (auto &endpoint : tracker.endpoints) {
+                seeds = std::max(seeds, endpoint.scrape_complete);
+                peers = std::max(peers, endpoint.scrape_incomplete);
+                downloaded = std::max(downloaded, endpoint.scrape_downloaded);
+                fails = std::max(fails, int(endpoint.fails));
+                is_updating = is_updating || endpoint.updating;
+                is_working = is_working || endpoint.is_working();
+                if (endpoint.enabled) {
+                    auto in = std::chrono::duration_cast<std::chrono::seconds>(endpoint.next_announce - now).count();
+                    if (in >= 0 && (next_announce < 0 || in < next_announce))
+                        next_announce = in;
+                }
+                if (endpoint.last_error)
+                    message = endpoint.last_error.message();
+                else if (!endpoint.message.empty() && message.empty())
+                    message = endpoint.message;
             }
-        } else if (snap->have_piece(i)) {
-            // We already have this piece
-            total_have++;
-            if (priority_of(i) > 0)
-                total_prioritized++;
 
-            ss << "+";
-        } else if (priority_of(i) == 0) {
-            // Piece is not prioritized
-            ss << "-";
-        } else {
-            // Piece is in the queue
-            total_prioritized++;
-            ss << priority_of(i);
+            if (auto info = tracker_infos.find(tracker.url); info != tracker_infos.end()) {
+                if (peers == -1)
+                    peers = info->second.numPeers;
+                if (message.empty())
+                    message = info->second.lastMessage;
+            }
+
+            std::string state = is_updating  ? "Updating"
+                                : is_working ? "Working"
+                                : fails > 0  ? Fmt("Failed %d times", fails)
+                                             : "Not contacted";
+            tracker_line(html_escape(tracker.url), std::to_string(tracker.tier), state, peer_num_to_string(seeds),
+                         peer_num_to_string(peers), peer_num_to_string(downloaded),
+                         next_announce >= 0 ? Fmt("in %ds", int(next_announce)) : "-", html_escape(message));
         }
 
-        if (i > 0 && (i + 1) % 100 == 0) {
-            ss << "\n        ";
-        }
+        if (auto dht = tracker_infos.find("DHT"); dht != tracker_infos.end())
+            tracker_line("DHT", "-", status.announcing_to_dht ? "Working" : "Off", "-", peer_num_to_string(dht->second.numPeers), "-", "-",
+                         html_escape(dht->second.lastMessage));
+        ss << "\n";
     }
-    ss << Fmt("\n        Readers: <b>%d</b>, Stored: <b>%d</b>, Prioritized: <b>%d</b>", int(reader_positions.size()), total_have,
-              total_prioritized);
-    ss << "\n\n\n";
+
+    if (is_pieces) {
+        ss << "    Pieces (<b>*</b> stored and read by a stream, <b>?</b> wanted by a stream, + stored, ~ downloading, 1-7 queued with "
+              "that priority, - not wanted):\n";
+        ss << "        ";
+
+        std::vector<int> reader_positions;
+        {
+            std::scoped_lock guard(m_readersMutex);
+            for (const auto &[id, reader] : m_readers)
+                reader_positions.push_back(reader->piece_start());
+        }
+
+        // One call for all priorities and one for the pieces in download, stored pieces come from the snapshot
+        auto piece_priorities = with_handle([](const lt::torrent_handle &h) { return h.get_piece_priorities(); });
+        auto priority_of = [&](int i) { return std::size_t(i) < piece_priorities.size() ? int(piece_priorities[i]) : 0; };
+        auto queue = with_handle([](const lt::torrent_handle &h) {
+            std::vector<lt::partial_piece_info> pieces;
+            h.get_download_queue(pieces);
+            return pieces;
+        });
+        std::vector<bool> is_downloading(std::max(0, pieces_count()));
+        for (const auto &partial : queue) {
+            if (std::size_t(int(partial.piece_index)) < is_downloading.size())
+                is_downloading[int(partial.piece_index)] = true;
+        }
+
+        int total_prioritized = 0;
+        int total_have = 0;
+        int total_downloading = 0;
+        for (int i = 0; i < pieces_count(); i++) {
+            const bool have = snap->have_piece(i);
+            if (have)
+                total_have++;
+            if (!have && is_downloading[i])
+                total_downloading++;
+
+            if (std::find(reader_positions.begin(), reader_positions.end(), i) != reader_positions.end()) {
+                total_prioritized++;
+                ss << (have ? "<b>*</b>" : "<b>?</b>");
+            } else if (have) {
+                if (priority_of(i) > 0)
+                    total_prioritized++;
+                ss << "+";
+            } else if (is_downloading[i]) {
+                total_prioritized++;
+                ss << "~";
+            } else if (priority_of(i) == 0) {
+                ss << "-";
+            } else {
+                total_prioritized++;
+                ss << priority_of(i);
+            }
+
+            if (i > 0 && (i + 1) % 100 == 0) {
+                ss << "\n        ";
+            }
+        }
+        const int count = std::max(1, pieces_count());
+        ss << Fmt(
+            "\n        Total: <b>%d</b>, Stored: <b>%d</b> (%.2f%%), Downloading: <b>%d</b>, Prioritized: <b>%d</b>, Readers: <b>%d</b>",
+            pieces_count(), total_have, 100. * total_have / count, total_downloading, total_prioritized, int(reader_positions.size()));
+        ss << "\n";
+    }
+    ss << "\n\n";
     ss << "    " << std::string(150, '*') << "\n";
     ss << "\n\n";
 }
@@ -744,6 +767,12 @@ int Torrent::readahead_pieces() const {
 bool Torrent::has_readers() const {
     std::scoped_lock guard(m_readersMutex);
     return !m_readers.empty();
+}
+
+int Torrent::readers_count(int file_index) const {
+    std::scoped_lock guard(m_readersMutex);
+    return int(std::count_if(m_readers.begin(), m_readers.end(),
+                             [file_index](const auto &r) { return file_index < 0 || r.second->file_index() == file_index; }));
 }
 
 void Torrent::register_reader(Reader *reader) {
@@ -871,6 +900,47 @@ void Torrent::update_buffer_progress() {
         }
 
         file->set_buffer_progress(double(buffer_size - missing) / buffer_size * 100);
+    }
+}
+
+std::string Torrent::meta_info() const {
+    std::scoped_lock guard(m_mutex);
+    return m_metaInfo;
+}
+
+void Torrent::meta_info(const std::string &json) {
+    std::scoped_lock guard(m_mutex);
+    m_metaInfo = json;
+    // Memory storage torrents are not kept between runs, their meta info neither
+    if (!is_memory_storage() && !save_file(m_metaFile, m_metaInfo.data(), m_metaInfo.size()))
+        throw lh::TorrentException("Could not save meta info to: " + m_metaFile);
+}
+
+int Torrent::players() const { return m_players; }
+
+void Torrent::add_player() { m_players++; }
+
+void Torrent::expire_players() {
+    auto const now = std::chrono::steady_clock::now();
+    auto const timeout = std::chrono::seconds(lh::config().player_timeout);
+    // A crashed player's connections are closed by the system, so its readers are gone too
+    if (m_players == 0 || has_readers() || timeout.count() <= 0) {
+        m_playersIdleSince = now;
+        return;
+    }
+    if (now - m_playersIdleSince < timeout)
+        return;
+
+    OATPP_LOGI("Torrent::expire_players", "Removing %d players of torrent %s, it has no stream connections for %d seconds", players(),
+               hash().c_str(), int(timeout.count()));
+    m_players = 0;
+    m_playersIdleSince = now;
+}
+
+void Torrent::remove_player() {
+    // Never below 0, when a client removes more players than it added
+    int players = m_players;
+    while (players > 0 && !m_players.compare_exchange_weak(players, players - 1)) {
     }
 }
 

@@ -7,6 +7,10 @@
 
 #include "oatpp/web/server/api/ApiController.hpp"
 
+#include <libtorrent/download_priority.hpp>
+
+#include <bittorrent/torrent.h>
+
 #include <dto/error.h>
 #include <dto/file_operation.h>
 #include <dto/torrent_operation.h>
@@ -24,6 +28,19 @@ inline std::string hash_from_param(const oatpp::String &param) {
 }
 
 inline bool is_true(const oatpp::String &param) { return uri_unescape(*param) == "true"; }
+
+inline lt::download_priority_t priority_from_param(const oatpp::String &param) {
+    auto priority = std::stoi(uri_unescape(*param));
+    if (priority < int(lt::dont_download) || priority > int(lt::top_priority))
+        throw std::invalid_argument("Priority must be from 0 to 7");
+    return lt::download_priority_t(std::uint8_t(priority));
+}
+
+// Memory storage downloads only what is streamed or buffered, file priorities do nothing there
+inline void check_file_storage(const Torrent &torrent) {
+    if (torrent.is_memory_storage())
+        throw std::invalid_argument("File priorities are not used with memory storage");
+}
 
 // Turns exceptions thrown by an endpoint into the 500 response DTOs that clients expect.
 class Controller : public oatpp::web::server::api::ApiController {

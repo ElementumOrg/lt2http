@@ -59,25 +59,53 @@ class SessionController : public lh::Controller {
     ENDPOINT_INFO(info) {
         info->summary = "Dump information for all running torrents";
 
-        info->addResponse<String>(Status::CODE_200, "text/plain");
+        info->queryParams.add<String>("torrent").description = "Show only the torrent with this InfoHash";
+        info->queryParams.add<String>("torrent").required = false;
+
+        for (const char *section : {"files", "trackers", "pieces"}) {
+            info->queryParams.add<String>(section).description = Fmt("Show %s. Values: true/false. Default: true", section);
+            info->queryParams.add<String>(section).required = false;
+        }
+
+        info->addResponse<String>(Status::CODE_200, "text/html");
     }
-    ENDPOINT("GET", "/info", info) {
+    ENDPOINT("GET", "/info", info, QUERY(String, torrent_param, "torrent", ""), QUERY(String, files_param, "files", "true"),
+             QUERY(String, trackers_param, "trackers", "true"), QUERY(String, pieces_param, "pieces", "true")) {
+        auto hash = lh::hash_from_param(torrent_param);
+
         std::stringstream ss;
         ss << "<!DOCTYPE html><html lang=\"en-US\"><head>"
            << "<title>lt2http Status</title>"
            << R"(<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>)"
            << R"(<meta http-equiv="refresh" content="30">)"
-           << "</head><body>";
+           // Actions call the API and reload the page
+           << R"(<script>
+function act(url, question) {
+    if (question && !confirm(question)) return false;
+    fetch(url).then(r => r.json()).then(j => { if (j.success === false) alert(j.error); location.reload(); }).catch(e => alert(e));
+    return false;
+}
+</script>)"
+           << "</head><body><pre>"
+           << Fmt("    lt2http %s (commit %s), libtorrent %s (%s)\n", lh::VERSION.c_str(), lh::COMMIT.c_str(), LIBTORRENT_VERSION,
+                  LIBTORRENT_REVISION)
+           << R"(    Show: <a href="/info">All torrents</a> | <a href="/info?files=false&trackers=false&pieces=false">Summary</a>)"
+           << "\n\n</pre>";
 
         for (const auto &torrent : lh::session().torrents()) {
+            if (!hash.empty() && hash != torrent->hash())
+                continue;
+
             ss << "<pre>";
-            torrent->dump(ss);
+            torrent->dump(ss, lh::is_true(files_param), lh::is_true(trackers_param), lh::is_true(pieces_param));
             ss << "</pre>";
         }
 
         ss << "</body></html>";
 
-        return createResponse(Status::CODE_200, ss.str());
+        auto response = createResponse(Status::CODE_200, ss.str());
+        response->putHeader(Header::CONTENT_TYPE, "text/html; charset=utf-8");
+        return response;
     }
 
     ENDPOINT_INFO(status) {

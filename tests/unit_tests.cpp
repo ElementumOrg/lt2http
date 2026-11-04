@@ -16,6 +16,7 @@
 
 #include <app/config.h>
 #include <bittorrent/natpmp.h>
+#include <bittorrent/torrent_state.h>
 #include <utils/numbers.h>
 #include <utils/path.h>
 #include <utils/pieces.h>
@@ -83,8 +84,51 @@ static void test_strings() {
     CHECK(guess_mime_type("movie.mp4") == "video/mp4");
     CHECK(guess_mime_type("notes.txt") == "");
 
+    CHECK(html_escape(R"(<a href="x">'&'</a>)") == "&lt;a href=&quot;x&quot;&gt;&#39;&amp;&#39;&lt;/a&gt;");
+
     CHECK(get_random_numeric(10).size() == 10);
     CHECK(get_random_numeric(10).find_first_not_of("0123456789") == std::string::npos);
+}
+
+static void test_state() {
+    using lh::TorrentState;
+    auto state = [](const lt::torrent_status &s, bool metadata = true, bool paused = false, bool buffering = false, int players = 0) {
+        return lh::compute_state(s, metadata, paused, buffering, players);
+    };
+
+    lt::torrent_status s;
+    s.state = lt::torrent_status::downloading;
+    s.total_wanted = 100;
+    s.total_wanted_done = 10;
+    CHECK(state(s) == TorrentState::Stalled);
+    s.download_payload_rate = 1000;
+    CHECK(state(s) == TorrentState::Downloading);
+    CHECK(state(s, false) == TorrentState::Finding);
+    CHECK(state(s, true, true) == TorrentState::Paused);
+    CHECK(state(s, true, false, true, 1) == TorrentState::Buffering);
+    CHECK(state(s, true, false, false, 1) == TorrentState::Playing);
+
+    s.flags = lt::torrent_flags::auto_managed | lt::torrent_flags::paused;
+    CHECK(state(s) == TorrentState::Queued);
+    s.flags = {};
+
+    s.state = lt::torrent_status::checking_files;
+    CHECK(state(s, true, false, true, 1) == TorrentState::Checking);
+
+    s.state = lt::torrent_status::finished;
+    s.total_wanted_done = 100;
+    CHECK(state(s) == TorrentState::Finished);
+    CHECK(state(s, true, true) == TorrentState::Finished);
+    s.is_seeding = true;
+    CHECK(state(s) == TorrentState::Seeding);
+
+    s.errc = lt::errors::make_error_code(lt::errors::file_too_short);
+    CHECK(state(s, true, true) == TorrentState::Error);
+
+    // Elementum's numbers
+    CHECK(int(TorrentState::Finding) == 2);
+    CHECK(int(TorrentState::Playing) == 10);
+    CHECK(std::string(lh::state_to_string(TorrentState::Seeding)) == "Seeding");
 }
 
 static void test_pieces() {
@@ -197,6 +241,7 @@ int main() {
     test_changelog();
     test_numbers();
     test_strings();
+    test_state();
     test_pieces();
     test_path();
     test_params();

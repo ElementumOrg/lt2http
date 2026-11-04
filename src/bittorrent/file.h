@@ -52,6 +52,8 @@ class File {
     std::int64_t size() const;
     std::int64_t offset() const;
     std::string stream_uri() const;
+    // Active stream connections of this file
+    int readers_count() const;
 
     lt::piece_index_t piece_start() const;
     lt::piece_index_t piece_end() const;
@@ -59,7 +61,9 @@ class File {
     lt::download_priority_t priority() const;
     void set_priority(lt::download_priority_t priority);
 
-    void start_buffer();
+    // Like Elementum: downloads first `length` bytes from `position` (buffer_size from the config for 0) and the
+    // end_buffer_size end of the file, which players read on start
+    void start_buffer(std::int64_t position = 0, std::int64_t length = 0);
     void stop_buffer();
 
     bool is_buffering() const;

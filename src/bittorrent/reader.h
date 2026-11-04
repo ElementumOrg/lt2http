@@ -46,6 +46,7 @@ class Reader : public oatpp::data::stream::ReadCallback {
     std::int64_t id() const;
     int piece_start() const;
     int piece_end_limit() const;
+    int file_index() const;
 
     bool is_closing() const;
 

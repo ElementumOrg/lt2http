@@ -28,6 +28,9 @@ class FileStatusDto : public oatpp::DTO {
 
     DTO_FIELD_INFO(buffering_progress) { info->description = "Percent of a buffering progress (0 to 100)"; }
     DTO_FIELD(Float64, buffering_progress);
+
+    DTO_FIELD_INFO(readers) { info->description = "Active stream connections of this file"; }
+    DTO_FIELD(Int32, readers);
 };
 
 #include OATPP_CODEGEN_END(DTO)
@@ -42,6 +45,7 @@ inline oatpp::Object<FileStatusDto> fileStatusDtoFromFile(const std::shared_ptr<
     dto->priority = file->priority();
     dto->buffering_total = file->buffer_size();
     dto->buffering_progress = file->buffer_progress();
+    dto->readers = file->readers_count();
 
     return dto;
 }

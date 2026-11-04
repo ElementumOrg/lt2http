@@ -35,6 +35,8 @@ int Reader::piece_start() const { return m_piece_start; }
 
 int Reader::piece_end_limit() const { return m_file->piece_end(); }
 
+int Reader::file_index() const { return int(m_file->index()); }
+
 bool Reader::is_closing() const { return m_isClosing; }
 
 oatpp::v_io_size Reader::read(void *buffer, v_buff_size bufferSize, [[maybe_unused]] oatpp::async::Action &action) {

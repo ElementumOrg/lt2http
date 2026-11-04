@@ -25,6 +25,10 @@ Main API endpoints (see Swagger for all of them and their parameters):
 - `/service/add/uri`, `/service/add/file` - add a torrent by magnet, URL, local path or uploaded file
 - `/torrents`, `/torrents/{infoHash}/...` - list, inspect, pause, resume and remove torrents and their files
 - `/torrents/{infoHash}/files/{index}/stream/{file_name}` - stream a file, with range requests
+- `/torrents/{infoHash}/files/{index}/buffer` - download the start (or any part) and the end of a file first
+- `/torrents/{infoHash}/files/download`, `/files/stop`, `/files/{index}/set_priority` - choose what to download
+- `/torrents/{infoHash}/meta_info` - free JSON kept with the torrent (GET to read, POST to set, `null` removes it)
+- `/torrents/{infoHash}/players/add`, `/players/remove` - register players, the torrent state is "Playing" while it has any. Players are removed after `player_timeout` seconds (default 60) without stream connections, like when Kodi crashes
 - `/settings/get`, `/settings/set` - read and change settings at runtime
 - `/shutdown` - stop gracefully (exit code 0)
 

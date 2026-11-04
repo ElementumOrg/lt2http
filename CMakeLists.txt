@@ -21,6 +21,7 @@ feature_option(static_runtime "Link the C++ runtime statically" ON)
 feature_option(enable_sanitizers "Build with address, leak and undefined behavior sanitizers" OFF)
 feature_option(build_tests "Build the unit tests, run with ctest" OFF)
 feature(lt2http_version STRING ON "Version reported by lt2http" "0.0.1")
+feature(lt2http_commit STRING ON "Git commit reported by lt2http" "unknown")
 
 set(Boost_USE_STATIC_LIBS ON)
 set(OPENSSL_USE_STATIC_LIBS ON)
@@ -82,7 +83,7 @@ target_precompile_headers(lt2http_objects PRIVATE
         "$<$<COMPILE_LANGUAGE:CXX>:<boost/filesystem.hpp$<ANGLE-R>>"
         "$<$<COMPILE_LANGUAGE:CXX>:<boost/algorithm/string.hpp$<ANGLE-R>>")
 
-# The version and changelog.md (served by /changelog) go into one generated source file, so a new commit or
+# The version, commit and changelog.md (served by /changelog) go into one generated source file, so a new commit or
 # changelog only recompiles that file. CMake configures again when changelog.md changes.
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/changelog.md" lt2http_changelog)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS changelog.md)

@@ -1,6 +1,7 @@
 NAME = lt2http
 GIT = git
 GIT_VERSION = $(shell $(GIT) describe --tags --always)
+GIT_COMMIT = $(shell $(GIT) rev-parse --short HEAD)
 DOCKER = docker
 DOCKER_IMAGE = elementumorg/lt2http
 BUILD_DIR = build
@@ -68,7 +69,7 @@ $(PLATFORMS) $(SHARED_PLATFORMS):
 	mkdir -p "$(BUILD_DIR)/$(PLATFORM)"
 	$(DOCKER) run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/$(NAME)" -w "/$(NAME)" $(DOCKER_IMAGE):$(PLATFORM) bash -c '\
 		cmake -B "$(CMAKE_BUILD)" $${CMAKE_TOOLCHAIN_FILE:+-DCMAKE_TOOLCHAIN_FILE=$$CMAKE_TOOLCHAIN_FILE} \
-			-DCMAKE_BUILD_TYPE=$(BUILD_TYPE) -Dlt2http_version=$(GIT_VERSION) $(CMAKE_FLAGS) && \
+			-DCMAKE_BUILD_TYPE=$(BUILD_TYPE) -Dlt2http_version=$(GIT_VERSION) -Dlt2http_commit=$(GIT_COMMIT) $(CMAKE_FLAGS) && \
 		cmake --build "$(CMAKE_BUILD)" --target $(CMAKE_TARGET) -j$(BUILD_JOBS)'
 	cp "$(CMAKE_BUILD)/$(call output_name,$@)" "$(BUILD_DIR)/$(PLATFORM)/"
 	@# The add-on compares the sha1 appended to the file to decide if it has to copy a new version
@@ -106,7 +107,7 @@ local-env:
 
 local:
 	cmake -B $(BUILD_DIR)/cmake/local -DCMAKE_BUILD_TYPE=$(BUILD_TYPE) -DCMAKE_PREFIX_PATH=$(LOCAL_PREFIX) \
-		-Dlt2http_version=$(GIT_VERSION) $(CMAKE_FLAGS)
+		-Dlt2http_version=$(GIT_VERSION) -Dlt2http_commit=$(GIT_COMMIT) $(CMAKE_FLAGS)
 	cmake --build $(BUILD_DIR)/cmake/local -j$(BUILD_JOBS)
 
 binaries:
@@ -126,7 +127,7 @@ binaries:
 test:
 	$(DOCKER) run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/$(NAME)" -w "/$(NAME)" $(DOCKER_IMAGE):linux-x64 bash -c '\
 		cmake -B "$(BUILD_DIR)/cmake/test" $${CMAKE_TOOLCHAIN_FILE:+-DCMAKE_TOOLCHAIN_FILE=$$CMAKE_TOOLCHAIN_FILE} \
-			-DCMAKE_BUILD_TYPE=$(BUILD_TYPE) -Dlt2http_version=$(GIT_VERSION) -Dbuild_tests=ON $(CMAKE_FLAGS) && \
+			-DCMAKE_BUILD_TYPE=$(BUILD_TYPE) -Dlt2http_version=$(GIT_VERSION) -Dlt2http_commit=$(GIT_COMMIT) -Dbuild_tests=ON $(CMAKE_FLAGS) && \
 		cmake --build "$(BUILD_DIR)/cmake/test" -j$(BUILD_JOBS) && \
 		ctest --test-dir "$(BUILD_DIR)/cmake/test" --output-on-failure'
 	tests/smoke_test.sh "$(BUILD_DIR)/cmake/test/lt2http"

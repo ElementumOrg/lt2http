@@ -50,6 +50,10 @@ inline std::string parts_file(const std::string &save_path, const std::string &i
     return path_append(save_path, info_hash + ".parts");
 }
 
+inline std::string meta_file(const std::string &save_path, const std::string &info_hash) {
+    return path_append(save_path, info_hash + ".meta");
+}
+
 inline std::string torrent_file(const std::string &save_path, const std::string &info_hash) {
     return path_append(save_path, info_hash + ".torrent");
 }

@@ -65,6 +65,34 @@ inline std::string get_random_numeric(int size) {
 
 inline std::string peer_num_to_string(int num) { return num <= 0 ? "-" : std::to_string(num); }
 
+// Text from torrents and API clients, put into the HTML of /info
+inline std::string html_escape(const std::string &input) {
+    std::string result;
+    result.reserve(input.size());
+    for (char c : input) {
+        switch (c) {
+        case '&':
+            result += "&amp;";
+            break;
+        case '<':
+            result += "&lt;";
+            break;
+        case '>':
+            result += "&gt;";
+            break;
+        case '"':
+            result += "&quot;";
+            break;
+        case '\'':
+            result += "&#39;";
+            break;
+        default:
+            result += c;
+        }
+    }
+    return result;
+}
+
 inline std::string get_file_ext(const std::string &s) {
     auto i = s.rfind('.');
     return i == std::string::npos ? "" : s.substr(i + 1);

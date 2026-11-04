@@ -228,16 +228,7 @@ void Session::configure() {
         m_pack.set_int(lt::settings_pack::connection_speed, m_config.conntracker_limit);
     }
 
-    if (!m_config.limit_after_buffering) {
-        if (m_config.max_download_rate > 0) {
-            OATPP_LOGI("Session::configure", "Rate limiting download to: %d", m_config.max_download_rate * 1024)
-            m_pack.set_int(lt::settings_pack::download_rate_limit, m_config.max_download_rate * 1024);
-        }
-        if (m_config.max_upload_rate > 0) {
-            OATPP_LOGI("Session::configure", "Rate limiting upload to: %d", m_config.max_upload_rate * 1024)
-            m_pack.set_int(lt::settings_pack::upload_rate_limit, m_config.max_upload_rate * 1024);
-        }
-    }
+    // Rate limits are set by update_rate_limits(), which the prioritizer calls
 
     // TODO: Enable when it's working!
     // if s.config.DisableUpload {
@@ -661,23 +652,48 @@ void Session::prioritize() {
     OATPP_LOGI("Session::prioritize", "Starting prioritizer thread");
 
     for (;;) {
+        bool is_buffering = false;
         for (const auto &t : torrents()) {
             // One failing torrent must not stop the prioritizer
             try {
-                if (t->is_buffering())
+                t->expire_players();
+                if (t->is_buffering()) {
+                    is_buffering = true;
                     t->update_buffer_progress();
-                else if (t->has_readers())
+                } else if (t->has_readers())
                     t->prioritize();
             } catch (const std::exception &e) {
                 OATPP_LOGE("Session::prioritize", "Error prioritizing torrent %s: %s", t->hash().c_str(), e.what());
             }
         }
+        update_rate_limits(is_buffering);
 
         if (wait_for_abort(std::chrono::milliseconds(500))) {
             OATPP_LOGI("Session::prioritize", "Stop prioritizer due to closing application");
             return;
         }
     }
+}
+
+void Session::update_rate_limits(bool is_buffering) {
+    std::scoped_lock lock(m_portsMutex);
+    // With limit_after_buffering, buffering runs without limits
+    const bool is_unlimited = m_config.limit_after_buffering && is_buffering;
+    const int download = is_unlimited ? 0 : std::max(0, m_config.max_download_rate) * 1024;
+    const int upload = is_unlimited ? 0 : std::max(0, m_config.max_upload_rate) * 1024;
+    // m_pack has the applied limits, configure() resets them to 0
+    if (download == m_pack.get_int(lt::settings_pack::download_rate_limit) &&
+        upload == m_pack.get_int(lt::settings_pack::upload_rate_limit))
+        return;
+
+    OATPP_LOGI("Session::update_rate_limits", "Rate limiting download to: %d, upload to: %d (0 is unlimited)", download, upload)
+    m_pack.set_int(lt::settings_pack::download_rate_limit, download);
+    m_pack.set_int(lt::settings_pack::upload_rate_limit, upload);
+
+    lt::settings_pack pack;
+    pack.set_int(lt::settings_pack::download_rate_limit, download);
+    pack.set_int(lt::settings_pack::upload_rate_limit, upload);
+    m_nativeSession->apply_settings(std::move(pack));
 }
 
 void Session::request_update() {

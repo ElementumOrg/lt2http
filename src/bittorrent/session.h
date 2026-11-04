@@ -74,6 +74,7 @@ class Session {
     void consume_alerts();
     void prioritize();
     void request_update();
+    void update_rate_limits(bool is_buffering);
     void close();
     void load_previous_torrents();
     void load_trackers();

@@ -1,6 +1,15 @@
 # Changelog
 
 ## 0.0.17 (2026-11-03)
+- Torrent states are the same as in Elementum: Queued, Checking, Finding, Downloading, Finished, Seeding, Stalled, Paused, Buffering, Playing (and Error), with the same numbers.
+- Added `/torrents/{infoHash}/meta_info`: any JSON set by a client is kept with the torrent (also after a restart), and returned in `/torrents` and `/torrents/{infoHash}/info`.
+- Added `/torrents/{infoHash}/files/{index}/buffer` to download a part of a file first, from any position, with the end of the file.
+- Added `/torrents/{infoHash}/files/download`, `/torrents/{infoHash}/files/stop` and `/torrents/{infoHash}/files/{index}/set_priority`.
+- Added `/torrents/{infoHash}/players/add` and `/players/remove`: the number of players and of active stream connections is in torrent info, and of stream connections per file in file status. Players are removed after `player_timeout` seconds (default 60) without stream connections, so a crashed player does not stay forever.
+- Torrent info has `is_paused`, `total_files`, `chosen_files` and the `memory_size` of memory storage, file info takes `?status=true`.
+- `/status` shows the lt2http version and commit, the libtorrent version and the user agent.
+- `/info` has actions for torrents and files (pause, resume, remove, download, stop, buffer, priority), shows one torrent with `?torrent=<infoHash>` and hides sections with `?files=false`, `?trackers=false`, `?pieces=false`. Trackers show their tier, status, scrape numbers and next announce, pieces show the ones in download and totals.
+- Fixed `limit_after_buffering` turning off the download and upload limits for good: limits now apply once buffering is done.
 - Added lt2http as a shared library (`lt2http.so` / `lt2http.dll`), started with `startWithLogAndArgs()`.
 - Added linux-armv7_softfp and darwin-arm64 (Apple Silicon) builds.
 - NAT-PMP port forwarding works behind VPNs (like ProtonVPN): the gateways of the listen interfaces (all private addresses by default) are probed, libtorrent listens on the port the gateway maps, and the mapping is renewed while lt2http runs.

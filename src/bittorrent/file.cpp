@@ -47,6 +47,8 @@ std::string File::stream_uri() const {
     return Fmt("/torrents/%s/files/%d/stream/%s", m_torrent->hash().c_str(), int(m_index), uri_escape(m_name).c_str());
 }
 
+int File::readers_count() const { return m_torrent->readers_count(int(m_index)); }
+
 lt::piece_index_t File::piece_start() const { return m_piece_start; }
 
 lt::piece_index_t File::piece_end() const { return m_piece_end; }
@@ -58,8 +60,13 @@ void File::set_priority(lt::download_priority_t priority) {
         m_torrent->file_priority(m_index, priority);
 }
 
-void File::start_buffer() {
-    OATPP_LOGI("File::start_buffer", "Buffering file: %s/%s", m_torrent->hash().c_str(), m_name.c_str())
+void File::start_buffer(std::int64_t position, std::int64_t length) {
+    position = std::clamp<std::int64_t>(position, 0, std::max<std::int64_t>(0, m_size - 1));
+    if (length <= 0)
+        length = m_start_buffer_size;
+
+    OATPP_LOGI("File::start_buffer", "Buffering file: %s/%s, from %s, length %s", m_torrent->hash().c_str(), m_name.c_str(),
+               humanize_bytes(position).c_str(), humanize_bytes(length).c_str())
 
     std::vector<int> pieces;
     std::int64_t size = 0;
@@ -73,11 +80,11 @@ void File::start_buffer() {
         }
     };
 
-    if (m_size >= m_start_buffer_size + m_end_buffer_size) {
-        add_region(m_offset, m_start_buffer_size);
-        add_region(m_offset + m_size - m_end_buffer_size, m_end_buffer_size);
+    if (position + length + m_end_buffer_size > m_size) {
+        add_region(m_offset + position, m_size - position);
     } else {
-        add_region(m_offset, m_size);
+        add_region(m_offset + position, length);
+        add_region(m_offset + m_size - m_end_buffer_size, m_end_buffer_size);
     }
 
     for (int piece : pieces) {

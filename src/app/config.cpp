@@ -71,7 +71,9 @@ Config::Config(int &argc, char *argv[]) {
                     ("buffer_size", bound(buffer_size), "Buffer size, to download before file is ready for playback (in MB)")(
                         "end_buffer_size", bound(end_buffer_size),
                         "End-of-file buffer size, to download before file is ready for playback (in MB)")(
-                        "buffer_timeout", bound(buffer_timeout), "Seconds to wait for buffer download (in seconds)")
+                        "buffer_timeout", bound(buffer_timeout), "Seconds to wait for buffer download (in seconds)")(
+                        "player_timeout", bound(player_timeout),
+                        "Remove players of a torrent after it has no stream connections for this long (in seconds, 0 never removes them)")
 
                         ("max_upload_rate", bound(max_upload_rate),
                          "Limit upload speed (in KB)")("max_download_rate", bound(max_download_rate), "Limit download speed (in KB)")(

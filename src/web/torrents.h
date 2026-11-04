@@ -183,6 +183,83 @@ class TorrentsController : public lh::Controller {
             return createResponse(Status::CODE_200, oatpp::String(tf.data(), tf.size()));
         });
     }
+
+    ENDPOINT_INFO(get_meta_info) {
+        info->summary = "Get meta info (free JSON set by the client) for torrent, identified by InfoHash";
+
+        info->pathParams.add<String>("infoHash").description = "Torrent InfoHash";
+
+        info->addResponse<String>(Status::CODE_200, "application/json");
+        info->addResponse<Object<TorrentOperationDto>>(Status::CODE_500, "application/json");
+    }
+    ENDPOINT("GET", "/torrents/{infoHash}/meta_info", get_meta_info, PATH(String, hash_param, "infoHash")) {
+        return torrentOperation("TorrentsController::get_meta_info", hash_param, [&](const std::string &hash) {
+            auto meta = lh::session().get_torrent(hash)->meta_info();
+            auto response = createResponse(Status::CODE_200, meta.empty() ? "null" : meta);
+            response->putHeader(Header::CONTENT_TYPE, "application/json");
+            return response;
+        });
+    }
+
+    ENDPOINT_INFO(set_meta_info) {
+        info->summary = "Set meta info (free JSON, kept with the torrent) for torrent, identified by InfoHash. null removes it";
+
+        info->pathParams.add<String>("infoHash").description = "Torrent InfoHash";
+
+        info->addConsumes<String>("application/json");
+
+        info->addResponse<Object<TorrentOperationDto>>(Status::CODE_200, "application/json");
+        info->addResponse<Object<TorrentOperationDto>>(Status::CODE_500, "application/json");
+    }
+    ENDPOINT("POST", "/torrents/{infoHash}/meta_info", set_meta_info, PATH(String, hash_param, "infoHash"), BODY_STRING(String, body)) {
+        return torrentOperation("TorrentsController::set_meta_info", hash_param, [&](const std::string &hash) {
+            OATPP_LOGI("TorrentsController::set_meta_info", "Setting meta info for torrent with infohash: %s", hash.c_str())
+            if (body->size() > 1024 * 1024)
+                throw std::invalid_argument("Meta info is bigger than 1 MB");
+
+            auto torrent = lh::session().get_torrent(hash);
+            // Throws on invalid JSON, keeps the parsed value, so what is stored is always valid
+            auto value = getDefaultObjectMapper()->readFromString<oatpp::Any>(body);
+            torrent->meta_info(value ? *getDefaultObjectMapper()->writeToString(value) : "");
+
+            return torrentSuccess(hash);
+        });
+    }
+
+    ENDPOINT_INFO(add_player) {
+        info->summary = "Register a player of torrent, identified by InfoHash. The torrent state is Playing while it has players. "
+                        "Players are removed after player_timeout seconds without stream connections";
+
+        info->pathParams.add<String>("infoHash").description = "Torrent InfoHash";
+
+        info->addResponse<Object<TorrentOperationDto>>(Status::CODE_200, "application/json");
+        info->addResponse<Object<TorrentOperationDto>>(Status::CODE_500, "application/json");
+    }
+    ENDPOINT("GET", "/torrents/{infoHash}/players/add", add_player, PATH(String, hash_param, "infoHash")) {
+        return torrentOperation("TorrentsController::add_player", hash_param, [&](const std::string &hash) {
+            auto torrent = lh::session().get_torrent(hash);
+            torrent->add_player();
+            OATPP_LOGI("TorrentsController::add_player", "Torrent %s has %d players", hash.c_str(), torrent->players())
+            return torrentSuccess(hash);
+        });
+    }
+
+    ENDPOINT_INFO(remove_player) {
+        info->summary = "Unregister a player of torrent, identified by InfoHash";
+
+        info->pathParams.add<String>("infoHash").description = "Torrent InfoHash";
+
+        info->addResponse<Object<TorrentOperationDto>>(Status::CODE_200, "application/json");
+        info->addResponse<Object<TorrentOperationDto>>(Status::CODE_500, "application/json");
+    }
+    ENDPOINT("GET", "/torrents/{infoHash}/players/remove", remove_player, PATH(String, hash_param, "infoHash")) {
+        return torrentOperation("TorrentsController::remove_player", hash_param, [&](const std::string &hash) {
+            auto torrent = lh::session().get_torrent(hash);
+            torrent->remove_player();
+            OATPP_LOGI("TorrentsController::remove_player", "Torrent %s has %d players", hash.c_str(), torrent->players())
+            return torrentSuccess(hash);
+        });
+    }
 };
 
 #include OATPP_CODEGEN_END(ApiController)

@@ -93,6 +93,8 @@ struct Config {
     int buffer_size = 20;
     int end_buffer_size = 4;
     int buffer_timeout = 60;
+    // Players of a torrent without stream connections for this long are removed (a crashed or closed player), 0 never removes them
+    int player_timeout = 60;
 
     int max_upload_rate = 0;
     int max_download_rate = 0;
@@ -165,7 +167,7 @@ struct Config {
 
               JS_MEMBER(readahead_percents),
 
-              JS_MEMBER(buffer_size), JS_MEMBER(end_buffer_size), JS_MEMBER(buffer_timeout),
+              JS_MEMBER(buffer_size), JS_MEMBER(end_buffer_size), JS_MEMBER(buffer_timeout), JS_MEMBER(player_timeout),
 
               JS_MEMBER(max_upload_rate), JS_MEMBER(max_download_rate), JS_MEMBER(limit_after_buffering),
 

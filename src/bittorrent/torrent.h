@@ -20,6 +20,7 @@
 
 #include <app/config.h>
 #include <bittorrent/memory_storage.h>
+#include <bittorrent/torrent_state.h>
 
 using Bitset = boost::dynamic_bitset<>;
 
@@ -27,35 +28,6 @@ namespace lh {
 
 class Reader;
 class File;
-
-enum class TorrentState {
-    Unknown = -1,
-    Queued,
-
-    ForcedDownloading,
-    Downloading,
-    DownloadingMetadata,
-    StalledDownloading,
-
-    ForcedUploading,
-    Uploading,
-    StalledUploading,
-
-    CheckingResumeData,
-    QueuedDownloading,
-    QueuedUploading,
-
-    CheckingUploading,
-    CheckingDownloading,
-
-    PausedDownloading,
-    PausedUploading,
-
-    Moving,
-
-    MissingFiles,
-    Error
-};
 
 struct TrackerInfo {
     std::string lastMessage;
@@ -70,7 +42,6 @@ struct TorrentSnapshot {
     lt::torrent_status status;
     // Null until metadata is received
     std::shared_ptr<const lt::torrent_info> info;
-    TorrentState state = TorrentState::Unknown;
 
     bool has_metadata() const { return info && info->is_valid() && info->num_files() > 0; }
     // As of the last status update, live checks use Torrent::have_piece()
@@ -109,13 +80,20 @@ class Torrent : public std::enable_shared_from_this<lh::Torrent> {
     std::string m_torrentFile;
     std::string m_resumeFile;
     std::string m_partsFile;
+    std::string m_metaFile;
+
+    // Free JSON set by API clients, see meta_info()
+    std::string m_metaInfo;
+    // Players registered with the API, see add_player()
+    std::atomic<int> m_players{0};
+    // Used only by the prioritizer thread, see expire_players()
+    std::chrono::steady_clock::time_point m_playersIdleSince = std::chrono::steady_clock::now();
 
     std::atomic<bool> m_isStopped{false};
 
     std::chrono::time_point<std::chrono::system_clock> m_addedTime;
 
     void set_snapshot(const lt::torrent_status &status, std::shared_ptr<const lt::torrent_info> info);
-    TorrentState compute_state(const lt::torrent_status &status, bool has_metadata) const;
     void log_handle_error(const std::exception &e) const;
     memory_storage *memory() const { return is_memory_storage() ? static_cast<memory_storage *>(m_storage) : nullptr; }
 
@@ -193,6 +171,9 @@ class Torrent : public std::enable_shared_from_this<lh::Torrent> {
 
     lt::download_priority_t file_priority(lt::file_index_t index) const;
     void file_priority(lt::file_index_t index, lt::download_priority_t priority);
+    // Sets the priority of all files
+    void files_priority(lt::download_priority_t priority);
+    int files_chosen() const;
     lt::download_priority_t piece_priority(lt::piece_index_t index) const;
     void piece_priority(lt::piece_index_t index, lt::download_priority_t priority);
     void set_piece_deadline(lt::piece_index_t index, int deadline);
@@ -207,7 +188,7 @@ class Torrent : public std::enable_shared_from_this<lh::Torrent> {
     void pause();
     void resume();
 
-    void dump(std::stringstream &ss);
+    void dump(std::stringstream &ss, bool is_files, bool is_trackers, bool is_pieces);
 
     void save_resume_data() const;
     void save_torrent_file() const;
@@ -219,11 +200,24 @@ class Torrent : public std::enable_shared_from_this<lh::Torrent> {
     int readahead_pieces() const;
 
     bool has_readers() const;
+    // Active stream connections, of one file or of all with file_index -1
+    int readers_count(int file_index = -1) const;
     void register_reader(Reader *reader);
     void unregister_reader(std::int64_t id);
 
     void prioritize();
     void update_buffer_progress();
+
+    // JSON text, empty if not set
+    std::string meta_info() const;
+    // Takes valid JSON text, saved with the torrent for file storage
+    void meta_info(const std::string &json);
+
+    int players() const;
+    void add_player();
+    void remove_player();
+    // Called by the prioritizer: removes players after player_timeout without stream connections
+    void expire_players();
 };
 
 } // namespace lh
