@@ -173,6 +173,12 @@ const torrent = (hash: string) => `/torrents/${encodeURIComponent(hash)}`;
 
 export const api = {
   languages: () => request<Languages>('/languages'),
+  // changelog.md of the running lt2http, as text
+  changelog: async () => {
+    const response = await fetch('/changelog');
+    if (!response.ok) throw new Error(response.statusText);
+    return response.text();
+  },
   settingsState: () => request<SettingsState>('/settings/state'),
 
   torrents: () => request<TorrentInfo[]>('/torrents?status=true'),

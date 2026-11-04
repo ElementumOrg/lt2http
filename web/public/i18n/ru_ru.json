@@ -150,5 +150,6 @@
   "network.local_port": "Локальный порт",
   "pieces.piece": "Часть {0}",
   "label.download_path": "Папка загрузки",
-  "ui.copy_path": "Копировать путь"
+  "ui.copy_path": "Копировать путь",
+  "nav.changelog": "Изменения"
 }

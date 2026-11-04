@@ -150,5 +150,6 @@
   "network.local_port": "Helyi port",
   "pieces.piece": "{0}. darab",
   "label.download_path": "Letöltési mappa",
-  "ui.copy_path": "Útvonal másolása"
+  "ui.copy_path": "Útvonal másolása",
+  "nav.changelog": "Változások"
 }

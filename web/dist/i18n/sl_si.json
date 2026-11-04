@@ -150,5 +150,6 @@
   "network.local_port": "Lokalna vrata",
   "pieces.piece": "Kos {0}",
   "label.download_path": "Mapa za prenose",
-  "ui.copy_path": "Kopiraj pot"
+  "ui.copy_path": "Kopiraj pot",
+  "nav.changelog": "Spremembe"
 }

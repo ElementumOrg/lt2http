@@ -1,9 +1,10 @@
 import { Anchor, AppShell, Burger, Group, NativeSelect, NavLink, Text } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import { IconApi, IconInfoCircle, IconList, IconPlus, IconSettings } from '@tabler/icons-react';
+import { IconApi, IconInfoCircle, IconList, IconNews, IconPlus, IconSettings } from '@tabler/icons-react';
 import { useHashRoute } from './hooks';
 import { useI18n } from './i18n';
 import { AddTorrent } from './pages/AddTorrent';
+import { ChangelogPage } from './pages/Changelog';
 import { SettingsPage } from './pages/Settings';
 import { TorrentDetails } from './pages/TorrentDetails';
 import { TorrentList } from './pages/TorrentList';
@@ -17,12 +18,14 @@ export function App() {
     { href: '#/', label: t('nav.torrents'), icon: IconList, active: !page || page === 'torrent' },
     { href: '#/add', label: t('nav.add'), icon: IconPlus, active: page === 'add' },
     { href: '#/settings', label: t('nav.settings'), icon: IconSettings, active: page === 'settings' },
+    { href: '#/changelog', label: t('nav.changelog'), icon: IconNews, active: page === 'changelog' },
   ];
 
   let content;
   if (page === 'torrent' && arg) content = <TorrentDetails hash={arg} />;
   else if (page === 'add') content = <AddTorrent />;
   else if (page === 'settings') content = <SettingsPage />;
+  else if (page === 'changelog') content = <ChangelogPage />;
   else content = <TorrentList />;
 
   return (

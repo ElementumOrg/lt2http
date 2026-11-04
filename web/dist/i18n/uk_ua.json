@@ -150,5 +150,6 @@
   "network.local_port": "Локальний порт",
   "pieces.piece": "Частина {0}",
   "label.download_path": "Тека завантаження",
-  "ui.copy_path": "Копіювати шлях"
+  "ui.copy_path": "Копіювати шлях",
+  "nav.changelog": "Зміни"
 }

@@ -150,5 +150,6 @@
   "network.local_port": "פורט מקומי",
   "pieces.piece": "חלק {0}",
   "label.download_path": "תיקיית הורדה",
-  "ui.copy_path": "העתקת נתיב"
+  "ui.copy_path": "העתקת נתיב",
+  "nav.changelog": "שינויים"
 }

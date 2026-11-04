@@ -150,5 +150,6 @@
   "network.local_port": "Porta locale",
   "pieces.piece": "Parte {0}",
   "label.download_path": "Cartella di download",
-  "ui.copy_path": "Copia percorso"
+  "ui.copy_path": "Copia percorso",
+  "nav.changelog": "Novità"
 }

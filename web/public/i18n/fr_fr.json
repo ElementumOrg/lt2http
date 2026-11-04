@@ -150,5 +150,6 @@
   "network.local_port": "Port local",
   "pieces.piece": "Pièce {0}",
   "label.download_path": "Dossier de téléchargement",
-  "ui.copy_path": "Copier le chemin"
+  "ui.copy_path": "Copier le chemin",
+  "nav.changelog": "Nouveautés"
 }

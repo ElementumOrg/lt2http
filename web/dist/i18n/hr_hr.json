@@ -150,5 +150,6 @@
   "network.local_port": "Lokalni port",
   "pieces.piece": "Dio {0}",
   "label.download_path": "Mapa preuzimanja",
-  "ui.copy_path": "Kopiraj putanju"
+  "ui.copy_path": "Kopiraj putanju",
+  "nav.changelog": "Promjene"
 }

@@ -150,5 +150,6 @@
   "network.local_port": "Lokale poort",
   "pieces.piece": "Stuk {0}",
   "label.download_path": "Downloadmap",
-  "ui.copy_path": "Pad kopiëren"
+  "ui.copy_path": "Pad kopiëren",
+  "nav.changelog": "Wijzigingen"
 }

@@ -150,5 +150,6 @@
   "network.local_port": "Τοπική θύρα",
   "pieces.piece": "Τμήμα {0}",
   "label.download_path": "Φάκελος λήψης",
-  "ui.copy_path": "Αντιγραφή διαδρομής"
+  "ui.copy_path": "Αντιγραφή διαδρομής",
+  "nav.changelog": "Αλλαγές"
 }

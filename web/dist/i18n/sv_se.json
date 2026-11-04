@@ -150,5 +150,6 @@
   "network.local_port": "Lokal port",
   "pieces.piece": "Del {0}",
   "label.download_path": "Hämtningsmapp",
-  "ui.copy_path": "Kopiera sökväg"
+  "ui.copy_path": "Kopiera sökväg",
+  "nav.changelog": "Ändringar"
 }

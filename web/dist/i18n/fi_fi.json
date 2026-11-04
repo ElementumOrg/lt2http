@@ -150,5 +150,6 @@
   "network.local_port": "Paikallinen portti",
   "pieces.piece": "Pala {0}",
   "label.download_path": "Latauskansio",
-  "ui.copy_path": "Kopioi polku"
+  "ui.copy_path": "Kopioi polku",
+  "nav.changelog": "Muutokset"
 }

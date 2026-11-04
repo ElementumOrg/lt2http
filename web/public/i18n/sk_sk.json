@@ -150,5 +150,6 @@
   "network.local_port": "Miestny port",
   "pieces.piece": "Časť {0}",
   "label.download_path": "Priečinok sťahovania",
-  "ui.copy_path": "Kopírovať cestu"
+  "ui.copy_path": "Kopírovať cestu",
+  "nav.changelog": "Zmeny"
 }

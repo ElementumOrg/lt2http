@@ -150,5 +150,6 @@
   "network.local_port": "Port local",
   "pieces.piece": "Bucata {0}",
   "label.download_path": "Dosar de descărcare",
-  "ui.copy_path": "Copiază calea"
+  "ui.copy_path": "Copiază calea",
+  "nav.changelog": "Modificări"
 }
