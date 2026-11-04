@@ -100,11 +100,13 @@ See `make help` for all targets.
 Build process helper:
 ----------
 
-For easy of building there is `test_build.sh` with 3 options, it copies the result into the local Kodi installation:
+`test_build.sh <build> [linux|wsl]` builds lt2http, installs it into the service.lt2http of a local Kodi
+(`linux`: `~/.kodi`, `wsl`: the Windows Kodi of `$WSL_USER`) with the add-on's version stamp, and restarts it there:
 ```
-test_build.sh local # Run compilation on a local system, without Docker
-test_build.sh sanitize # Run compilation with sanitizers and debug information.
-test_build.sh docker # Run compilation in a Docker.
+test_build.sh local # Native build with the 'make local-env' dependencies, without Docker
+test_build.sh sanitize # Native build with sanitizers and debug information
+test_build.sh docker # The binary, built in Docker
+test_build.sh docker-library # The shared library, built in Docker (Kodi loads a new library on its next start)
 ```
 
 Build troubleshooting
