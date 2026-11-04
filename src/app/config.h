@@ -158,6 +158,16 @@ struct Config {
 
     bool is_auth_needed() const { return !web_login.empty() || !web_password.empty(); }
 
+    // A copy to show or log, with the passwords replaced
+    Config masked() const {
+        Config copy = *this;
+        for (auto *secret : {&copy.web_password, &copy.proxy_password}) {
+            if (!secret->empty())
+                *secret = "***";
+        }
+        return copy;
+    }
+
     JS_OBJECT(JS_MEMBER(web_interface), JS_MEMBER(web_port),
 
               JS_MEMBER(download_storage), JS_MEMBER(auto_memory_size), JS_MEMBER(auto_memory_size_strategy), JS_MEMBER(memory_size),

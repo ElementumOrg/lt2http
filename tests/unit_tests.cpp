@@ -131,6 +131,16 @@ static void test_state() {
     CHECK(std::string(lh::state_to_string(TorrentState::Seeding)) == "Seeding");
 }
 
+static void test_masked_config() {
+    lh::Config config;
+    config.web_password = "secret";
+    config.proxy_password = "secret";
+    auto json = JS::serializeStruct(config.masked());
+    CHECK(json.find("secret") == std::string::npos);
+    CHECK(config.masked().web_password == "***");
+    CHECK(lh::Config().masked().web_password.empty());
+}
+
 static void test_pieces() {
     auto region = [](std::int64_t offset, std::int64_t size, int piece_length, int pieces_count) {
         auto [first, last] = region_pieces(offset, size, piece_length, pieces_count);
@@ -242,6 +252,7 @@ int main() {
     test_numbers();
     test_strings();
     test_state();
+    test_masked_config();
     test_pieces();
     test_path();
     test_params();

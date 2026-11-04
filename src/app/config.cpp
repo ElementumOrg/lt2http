@@ -254,6 +254,6 @@ Config::Config(int &argc, char *argv[]) {
         }
     }
 
-    OATPP_LOGI("Config", "Active configuration:\n%s", JS::serializeStruct(*this).c_str());
+    OATPP_LOGI("Config", "Active configuration:\n%s", JS::serializeStruct(masked()).c_str());
 }
 } // namespace lh
