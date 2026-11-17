@@ -1,6 +1,7 @@
 # Changelog
 
 ## 0.0.18 (2026-11-17)
+- When a player seeks or stops while a stream waits for a piece, lt2http now notices that the player left within a second, instead of waiting for the piece for up to 60 seconds and keeping it in the download order meanwhile.
 - Add-on: fixed Kodi using more and more CPU and memory the longer it runs: the add-on made Kodi keep every notification queued forever. (Thanks to @enderyildirim)
 
 ## 0.0.17 (2026-11-04)

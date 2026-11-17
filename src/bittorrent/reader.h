@@ -9,6 +9,7 @@
 
 #include <oatpp/core/Types.hpp>
 #include <oatpp/core/base/Environment.hpp>
+#include <oatpp/network/tcp/Connection.hpp>
 #include <oatpp/web/protocol/http/outgoing/StreamingBody.hpp>
 
 #include <app/config.h>
@@ -23,6 +24,8 @@ class Reader : public oatpp::data::stream::ReadCallback {
     std::shared_ptr<Torrent> m_torrent;
     std::shared_ptr<File> m_file;
     oatpp::web::protocol::http::Range m_range;
+    // The client connection, null when it is not TCP
+    std::shared_ptr<oatpp::network::tcp::Connection> m_connection;
 
     std::int64_t m_id;
 
@@ -40,7 +43,8 @@ class Reader : public oatpp::data::stream::ReadCallback {
     std::chrono::seconds m_piece_timeout{60};
 
   public:
-    Reader(std::shared_ptr<Torrent> torrent, std::shared_ptr<File> file, oatpp::web::protocol::http::Range range);
+    Reader(std::shared_ptr<Torrent> torrent, std::shared_ptr<File> file, oatpp::web::protocol::http::Range range,
+           const std::shared_ptr<oatpp::data::stream::IOStream> &connection);
     ~Reader() override;
 
     std::int64_t id() const;

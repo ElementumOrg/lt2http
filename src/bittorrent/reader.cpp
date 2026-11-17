@@ -6,10 +6,14 @@
 #include <libtorrent/download_priority.hpp>
 #include <utility>
 
+#include <utils/socket.h>
+
 namespace lh {
 
-Reader::Reader(std::shared_ptr<Torrent> torrent, std::shared_ptr<File> file, oatpp::web::protocol::http::Range range)
-    : m_torrent(std::move(torrent)), m_file(std::move(file)), m_range(std::move(range)) {
+Reader::Reader(std::shared_ptr<Torrent> torrent, std::shared_ptr<File> file, oatpp::web::protocol::http::Range range,
+               const std::shared_ptr<oatpp::data::stream::IOStream> &connection)
+    : m_torrent(std::move(torrent)), m_file(std::move(file)), m_range(std::move(range)),
+      m_connection(std::dynamic_pointer_cast<oatpp::network::tcp::Connection>(connection)) {
     static std::atomic<std::int64_t> last_id{0};
     m_id = ++last_id;
     OATPP_LOGI("Reader", "Creating reader for file: %s (%s)", m_file->path().c_str(), std::to_string(m_id).c_str());
@@ -123,6 +127,13 @@ void Reader::wait_for_piece(int piece) {
     while (!m_torrent->have_piece(piece)) {
         if (lh::is_closing || m_torrent->is_closing()) {
             OATPP_LOGI("Reader::wait_for_piece", "Abort waiting for piece '%d' due to closing", piece);
+            return;
+        }
+
+        // Nothing else notices a client that left, after a seek for example, while read() blocks here
+        if (m_connection && peer_closed(m_connection->getHandle())) {
+            OATPP_LOGI("Reader::wait_for_piece", "Abort waiting for piece '%d', the client closed the connection", piece);
+            m_isClosing = true;
             return;
         }
 

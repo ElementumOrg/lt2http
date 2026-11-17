@@ -161,6 +161,12 @@ check "player with a stream is kept" contains "$(get "$D/torrents/$HASH/info")" 
 check "remove while streaming" contains "$(get "$D/torrents/$HASH/remove")" '"success":true'
 wait $SLOW
 check "alive after remove" contains "$(get "$D/status")" '"torrents_count":0'
+# Without a peer the reader waits for its piece, until the client gives up on the stream
+check "add without peers" contains "$(curl -s -m 10 -F "file=@$WORK/test.torrent" "$D/service/add/file")" '"success":true'
+curl -s -m 2 -o /dev/null "$STREAM"
+sleep 2
+check "aborted stream stops waiting" contains "$(cat "$WORK/downloader.log")" 'the client closed the connection'
+check "remove without peers" contains "$(get "$D/torrents/$HASH/remove")" '"success":true'
 check "downloader stops" stop downloader $DOWNLOADER_PORT
 check "seeder stops after restart" stop seeder $SEEDER_PORT
 

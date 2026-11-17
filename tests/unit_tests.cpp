@@ -8,6 +8,10 @@
 #include <array>
 #include <thread>
 
+#ifndef _WIN32
+#include <unistd.h>
+#endif
+
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/ip/udp.hpp>
 #include <boost/filesystem.hpp>
@@ -22,6 +26,7 @@
 #include <utils/path.h>
 #include <utils/pieces.h>
 #include <utils/requests.h>
+#include <utils/socket.h>
 #include <utils/strings.h>
 #include <web/controller.h>
 
@@ -293,6 +298,22 @@ static void test_natpmp() {
     }
 }
 
+static void test_peer_closed() {
+#ifndef _WIN32
+    int fds[2];
+    CHECK(socketpair(AF_UNIX, SOCK_STREAM, 0, fds) == 0);
+    CHECK(!peer_closed(fds[0]));
+    CHECK(send(fds[1], "x", 1, 0) == 1);
+    CHECK(!peer_closed(fds[0])); // data waiting is not a close
+    close(fds[1]);
+    CHECK(!peer_closed(fds[0])); // data first, then the close
+    char c;
+    CHECK(recv(fds[0], &c, 1, 0) == 1);
+    CHECK(peer_closed(fds[0]));
+    close(fds[0]);
+#endif
+}
+
 int main() {
     test_changelog();
     test_numbers();
@@ -305,6 +326,7 @@ int main() {
     test_path();
     test_params();
     test_natpmp();
+    test_peer_closed();
 
     if (failures)
         std::fprintf(stderr, "%d checks failed\n", failures);

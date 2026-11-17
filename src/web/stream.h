@@ -56,7 +56,7 @@ class StreamController : public lh::Controller {
             OATPP_LOGD("StreamController::stream", "Range: start=%s, end=%s", std::to_string(range.start).c_str(),
                        std::to_string(range.end).c_str())
 
-            auto reader = std::make_shared<lh::Reader>(torrent, file, range);
+            auto reader = std::make_shared<lh::Reader>(torrent, file, range, request->getConnection());
             torrent->register_reader(reader.get());
 
             Response response;
